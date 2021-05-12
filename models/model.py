@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 
 
 class SLE(nn.Module):
@@ -56,14 +57,14 @@ class Generator(nn.Module):
 
     def __init__(self, img_size, in_channels=512, img_channels=3, z_dim=256):
         """
-        :param img_size: ``2^n``, final resolution must be power of 2
+        :param img_size: ``2^n``, final resolution
         :param in_channels: ``int``, number of input channels of generator
         :param img_channels: ``int``, 1 for grayscale, 3 for RGB, 4 for transparent
         :param z_dim: ``int``, latent space, in the paper equal 256
         """
         super().__init__()
+        assert img_size in [64, 128, 256, 512, 1024], 'image size must be [64, 128, 256, 512, 1024]'
         self.resolution = img_size
-        # TODO power of 2 res
         self.initial = nn.Sequential(
             nn.ConvTranspose2d(z_dim, in_channels, kernel_size=4, stride=1, padding=0),  # 1x1 to 4x4
             nn.BatchNorm2d(in_channels),
