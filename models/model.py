@@ -113,7 +113,7 @@ class UpSampleBlock(nn.Module):
 
 class Generator(nn.Module):
 
-    def __init__(self, img_size, in_channels=512, img_channels=3, z_dim=256):
+    def __init__(self, img_size, in_channels=512, img_channels=3, z_dim=256, res_type='sle'):
         """
         :param img_size: ``2^n``, final resolution
         :param in_channels: ``int``, number of input channels of generator
@@ -122,7 +122,10 @@ class Generator(nn.Module):
         """
         super().__init__()
         assert img_size in [64, 128, 256, 512, 1024], 'image size must be [64, 128, 256, 512, 1024]'
+        assert res_type in ['sle', 'gc'], 'res_type must be sle or gc'
+        self.res_type = res_type
         self.resolution = img_size
+        self.img_channels = img_channels
         self.initial = nn.Sequential(
             nn.ConvTranspose2d(z_dim, in_channels, kernel_size=4, stride=1, padding=0),  # 1x1 to 4x4
             nn.BatchNorm2d(in_channels),
@@ -139,35 +142,58 @@ class Generator(nn.Module):
         self.up_sample_512 = UpSampleBlock(32, 6)       # output shape ℝ[3x512x512]
         self.up_sample_1024 = UpSampleBlock(3, 6)       # output shape ℝ[3x1024x1024]
 
-        # Residual blocks
-        self.sle_8_to_128 = SLE(512, 64)
-        self.sle_16_to_256 = SLE(512, 32)
-        self.sle_32_to_512 = SLE(256, 3)
+        # SLE blocks
+        if self.res_type == 'sle':
+            self.sle_8_to_128 = SLE(512, 64)
+            self.sle_16_to_256 = SLE(512, 32)
+            self.sle_32_to_512 = SLE(256, 3)
+
+        # Global context blocks
+        elif self.res_type == 'gc':
+            self.gc_512 = GC(512)
+            self.gc_256 = GC(256)
+            self.gc_128 = GC(128)
+            self.gc_64 = GC(64)
 
         # Out
         self.output = nn.Sequential(
-            nn.Conv2d(3, 3, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(3, self.img_channels, kernel_size=3, stride=1, padding=1),
             nn.Tanh()
         )
 
     def forward(self, x):
         # input shape ℝ[N, z_dim, 1, 1] e.g. ℝ[1, 256, 1, 1]
         x_4 = self.initial(x)
-        x_8 = self.up_sample_8(x_4)
-        x_16 = self.up_sample_16(x_8)
-        x_32 = self.up_sample_32(x_16)
-        x_64 = self.up_sample_64(x_32)
+        if self.res_type == 'sle':
+            x_8 = self.up_sample_8(x_4)
+            x_16 = self.up_sample_16(x_8)
+            x_32 = self.up_sample_32(x_16)
+            x_64 = self.up_sample_64(x_32)
 
-        x_128 = self.up_sample_128(x_64)
-        sle_x_128 = self.sle_8_to_128(x_8, x_128)
+            x_128 = self.up_sample_128(x_64)
+            sle_x_128 = self.sle_8_to_128(x_8, x_128)
 
-        x_256 = self.up_sample_256(sle_x_128)
-        sle_x_256 = self.sle_16_to_256(x_16, x_256)
+            x_256 = self.up_sample_256(sle_x_128)
+            sle_x_256 = self.sle_16_to_256(x_16, x_256)
 
-        x_512 = self.up_sample_512(sle_x_256)
-        sle_x512 = self.sle_32_to_512(x_32, x_512)
+            x_512 = self.up_sample_512(sle_x_256)
+            sle_x512 = self.sle_32_to_512(x_32, x_512)
 
-        x_1024 = self.up_sample_1024(sle_x512)
-        x = self.output(x_1024)
+            x_1024 = self.up_sample_1024(sle_x512)
+            x = self.output(x_1024)
+
+        elif self.res_type == 'gc':
+            x = self.up_sample_8(x_4)
+            x = self.up_sample_16(x)
+            x = self.gc_512(x)
+            x = self.up_sample_32(x)
+            x = self.gc_256(x)
+            x = self.up_sample_64(x)
+            x = self.gc_128(x)
+            x = self.up_sample_128(x)
+            x = self.gc_64(x)
+            x = self.up_sample_256(x)
+            x = self.up_sample_512(x)
+            x = self.up_sample_1024(x)
 
         return x
