@@ -1,4 +1,6 @@
+import torch
 import torch.nn as nn
+from kornia import filter2D
 
 
 class SLE(nn.Module):
@@ -36,13 +38,26 @@ class SLE(nn.Module):
         return self.sle_block(x_low) * x_high
 
 
+class Blur(nn.Module):
+    """https://richzhang.github.io/antialiased-cnns/"""
+    def __init__(self):
+        super().__init__()
+        kernel = torch.Tensor([1, 2, 1])
+        self.register_buffer('kernel', kernel)
+
+    def forward(self, x):
+        kernel = self.kernel
+        kernel = kernel[None, None, :] * kernel[None, :, None]
+        return filter2D(x, kernel, normalized=True)
+
+
 class UpSampleBlock(nn.Module):
 
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.up_block = nn.Sequential(
             nn.Upsample(scale_factor=2.0, mode='nearest'),
-            # TODO add blur
+            Blur(),
             nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.GLU(dim=1)
