@@ -34,8 +34,52 @@ class SLE(nn.Module):
         :param x_high: input feature map from high resolution upsample layer
         :return y: output feature map: y = x_high ⊗ F(x_low, {W_i})
         """
-        # TODO possible need fix or try GlobalContext network
         return self.sle_block(x_low) * x_high
+
+
+class GC(nn.Module):
+    """
+    Global context
+    Based on this work: https://arxiv.org/abs/1904.11492
+    """
+    def __init__(self, in_channels, ratio=16):
+        super().__init__()
+        self.out_channels = int(in_channels * ratio)
+        self.conv_mask = nn.Conv2d(in_channels, 1, kernel_size=1)
+        self.softmax_d2 = nn.Softmax(dim=2)
+        self.transform = nn.Sequential(
+            nn.Conv2d(in_channels, self.out_channels, kernel_size=1),
+            nn.LayerNorm([self.out_channels, 1, 1]),
+            nn.Conv2d(self.out_channels, in_channels, kernel_size=1)
+        )
+
+    def _getcontext(self, x):
+        """
+        Context modeling block
+        :param x: Tensor([N, C, H, W])
+        :return: Tensor([N, C, 1, 1])
+        """
+        N, C, H, W = x.size()
+        x_hat = x
+        x_hat = x_hat.view(N, C, H * W)     # ℝ[N, C, H, W] --> ℝ[N, C, H * W]
+        x_hat = x_hat.unsqueeze(1)          # ℝ[N, C, H * W] --> ℝ[N, 1, C, H * W]
+        cm = self.conv_mask(x)              # ℝ[N, 1, C, H * W] --> ℝ[N, 1, H, W]
+        cm = cm.view(N, 1, H * W)           # ℝ[N, 1, H, W] --> ℝ[N, 1, H * W]
+        cm = self.softmax_d2(cm)            # softmax on second dimension
+        cm = cm.unsqueeze(3)                # ℝ[N, 1, H * W] --> ℝ[N, 1, H * W, 1]
+        context = torch.matmul(x_hat, cm)   # ℝ[N, 1, C, H * W] ⊗ ℝ[N, 1, H * W, 1] = ℝ[N, 1, C, 1]
+        context = context.view(N, C, 1, 1)  # ℝ[N, 1, C, 1] --> ℝ[N, C, 1, 1]
+        return context
+
+    def forward(self, x):
+        """
+        :param x: Tensor([N, C, H, W])
+        :return:
+        """
+        context = self._getcontext(x)           # ℝ[N, C, H, W] --> ℝ[N, C, 1, 1]
+        transform = self.transform(context)     # ℝ[N, C, 1, 1]
+        fusion = x + transform                  # ℝ[N, C, H, W] ⊕ ℝ[N, C, 1, 1] = ℝ[N, C, H, W]
+        return fusion
 
 
 class Blur(nn.Module):
@@ -86,14 +130,14 @@ class Generator(nn.Module):
         )
         # Upsample blocks
         # input shape [256x4x4]
-        self.up_sample_8 = UpSampleBlock(256, 1024)     # output shape [512x8x8]
-        self.up_sample_16 = UpSampleBlock(512, 1024)    # output shape [512x16x16]
-        self.up_sample_32 = UpSampleBlock(512, 512)     # output shape [256x32x32]
-        self.up_sample_64 = UpSampleBlock(256, 256)     # output shape [128x64x64]
-        self.up_sample_128 = UpSampleBlock(128, 128)    # output shape [64x128x128]
-        self.up_sample_256 = UpSampleBlock(64, 64)      # output shape [32x256x256]
-        self.up_sample_512 = UpSampleBlock(32, 6)       # output shape [3x512x512]
-        self.up_sample_1024 = UpSampleBlock(3, 6)       # output shape [3x1024x1024]
+        self.up_sample_8 = UpSampleBlock(256, 1024)     # output shape ℝ[512x8x8]
+        self.up_sample_16 = UpSampleBlock(512, 1024)    # output shape ℝ[512x16x16]
+        self.up_sample_32 = UpSampleBlock(512, 512)     # output shape ℝ[256x32x32]
+        self.up_sample_64 = UpSampleBlock(256, 256)     # output shape ℝ[128x64x64]
+        self.up_sample_128 = UpSampleBlock(128, 128)    # output shape ℝ[64x128x128]
+        self.up_sample_256 = UpSampleBlock(64, 64)      # output shape ℝ[32x256x256]
+        self.up_sample_512 = UpSampleBlock(32, 6)       # output shape ℝ[3x512x512]
+        self.up_sample_1024 = UpSampleBlock(3, 6)       # output shape ℝ[3x1024x1024]
 
         # Residual blocks
         self.sle_8_to_128 = SLE(512, 64)
@@ -107,7 +151,7 @@ class Generator(nn.Module):
         )
 
     def forward(self, x):
-        # input shape [N, z_dim, 1, 1] e.g. [1, 256, 1, 1]
+        # input shape ℝ[N, z_dim, 1, 1] e.g. ℝ[1, 256, 1, 1]
         x_4 = self.initial(x)
         x_8 = self.up_sample_8(x_4)
         x_16 = self.up_sample_16(x_8)
