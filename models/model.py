@@ -150,10 +150,11 @@ class Generator(nn.Module):
 
         # Global context blocks
         elif self.res_type == 'gc':
-            self.gc_512 = GC(512)
-            self.gc_256 = GC(256)
-            self.gc_128 = GC(128)
-            self.gc_64 = GC(64)
+            self.gc_16_512 = GC(512)
+            self.gc_32_256 = GC(256)
+            self.gc_64_128 = GC(128)
+            self.gc_128_64 = GC(64)
+            self.gc_256_32 = GC(32)
 
         # Out
         self.output = nn.Sequential(
@@ -163,9 +164,9 @@ class Generator(nn.Module):
 
     def forward(self, x):
         # input shape ℝ[N, z_dim, 1, 1] e.g. ℝ[1, 256, 1, 1]
-        x_4 = self.initial(x)
+        x = self.initial(x)
         if self.res_type == 'sle':
-            x_8 = self.up_sample_8(x_4)
+            x_8 = self.up_sample_8(x)
             x_16 = self.up_sample_16(x_8)
             x_32 = self.up_sample_32(x_16)
             x_64 = self.up_sample_64(x_32)
@@ -183,17 +184,19 @@ class Generator(nn.Module):
             x = self.output(x_1024)
 
         elif self.res_type == 'gc':
-            x = self.up_sample_8(x_4)
+            x = self.up_sample_8(x)
             x = self.up_sample_16(x)
-            x = self.gc_512(x)
+            x = self.gc_16_512(x)
             x = self.up_sample_32(x)
-            x = self.gc_256(x)
+            x = self.gc_32_256(x)
             x = self.up_sample_64(x)
-            x = self.gc_128(x)
+            x = self.gc_64_128(x)
             x = self.up_sample_128(x)
-            x = self.gc_64(x)
+            x = self.gc_128_64(x)
             x = self.up_sample_256(x)
+            x = self.gc_256_32(x)
             x = self.up_sample_512(x)
             x = self.up_sample_1024(x)
+            x = self.output(x)
 
         return x
