@@ -74,7 +74,7 @@ class GC(nn.Module):
     def forward(self, x):
         """
         :param x: Tensor([N, C, H, W])
-        :return:
+        :return: Tensor([N, C, H, W])
         """
         context = self._getcontext(x)           # ℝ[N, C, H, W] --> ℝ[N, C, 1, 1]
         transform = self.transform(context)     # ℝ[N, C, 1, 1]
@@ -165,21 +165,18 @@ class Generator(nn.Module):
     def forward(self, x):
         # input shape ℝ[N, z_dim, 1, 1] e.g. ℝ[1, 256, 1, 1]
         x = self.initial(x)
+
         if self.res_type == 'sle':
             x_8 = self.up_sample_8(x)
             x_16 = self.up_sample_16(x_8)
             x_32 = self.up_sample_32(x_16)
             x_64 = self.up_sample_64(x_32)
-
             x_128 = self.up_sample_128(x_64)
             sle_x_128 = self.sle_8_to_128(x_8, x_128)
-
             x_256 = self.up_sample_256(sle_x_128)
             sle_x_256 = self.sle_16_to_256(x_16, x_256)
-
             x_512 = self.up_sample_512(sle_x_256)
             sle_x512 = self.sle_32_to_512(x_32, x_512)
-
             x_1024 = self.up_sample_1024(sle_x512)
             x = self.output(x_1024)
 
