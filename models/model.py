@@ -42,7 +42,7 @@ class GC(nn.Module):
     Global context
     Based on this work: https://arxiv.org/abs/1904.11492
     """
-    def __init__(self, in_channels, ratio=16):
+    def __init__(self, in_channels, ratio=4):
         super().__init__()
         self.out_channels = int(in_channels * ratio)
         self.conv_mask = nn.Conv2d(in_channels, 1, kernel_size=1)
