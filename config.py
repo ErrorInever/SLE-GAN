@@ -12,26 +12,28 @@ __C.PROJECT_VERSION_NAME = "SLE-GAN"
 __C.DATASET_NAME = ""
 
 # Global
+__C.START_EPOCH = 0
+__C.END_EPOCH = 1
+
+__C.GEN_TYPE = 'sle'        # sle or gc
 __C.LEARNING_RATE = 1e-3
 __C.BATCH_SIZE = 8
-
 # SHAPES
 __C.Z_DIMENSION = 256
 __C.IMG_SIZE = 1024
 __C.CHANNELS_IMG = 3
 # Models features
-__C.IN_CHANNELS = 256
-
+__C.IN_CHANNELS = 512
+# Metrics
+__C.WANDB_ID = None
 # Paths and saves
+__C.SAVE_EACH_EPOCH = 10
 __C.OUT_DIR = ''
 __C.PATH_TO_LOG_FILE = 'SLE-GC-GAN/data/logs/train.log'
-
 # Display results
 __C.NUM_SAMPLES = 16
 __C.FREQ = 100
 __C.RESUME_ID = None
-
-
 # Init logger
 logger = logging.getLogger()
 c_handler = logging.StreamHandler()
