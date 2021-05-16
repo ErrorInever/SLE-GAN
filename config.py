@@ -27,7 +27,6 @@ __C.IN_CHANNELS = 512
 # Metrics
 __C.WANDB_ID = None
 # Paths and saves
-__C.SAVE_EACH_EPOCH = 10
 __C.OUT_DIR = ''
 __C.PATH_TO_LOG_FILE = 'SLE-GC-GAN/data/logs/train.log'
 # Display results
