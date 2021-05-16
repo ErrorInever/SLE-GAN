@@ -282,7 +282,7 @@ class Discriminator(nn.Module):
         self.down_sample_16 = DownSampleBlock(128, 256)
         self.down_sample_8 = DownSampleBlock(256, 512)
 
-        self.decoder_part = SimpleDecoder(512)
+        self.decoder_part = SimpleDecoder(256)
         self.decoder = SimpleDecoder(512)
 
         self.real_fake_logits_out = nn.Sequential(
@@ -300,7 +300,7 @@ class Discriminator(nn.Module):
         x_16 = self.down_sample_16(x)
         x_8 = self.down_sample_8(x_16)
 
-        crop_img_8 = center_crop_img(x_16, 8, mode='bilinear')
+        crop_img_8 = center_crop_img(x_16, (8, 8), mode='bilinear')
 
         decoded_img_128_part = self.decoder_part(crop_img_8)
         decoded_img_128 = self.decoder(x_8)
