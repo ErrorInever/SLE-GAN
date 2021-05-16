@@ -84,7 +84,10 @@ class GC(nn.Module):
 
 
 class Blur(nn.Module):
-    """https://richzhang.github.io/antialiased-cnns/"""
+    """
+    Blur for up sampling
+    Info: https://richzhang.github.io/antialiased-cnns/
+    """
     def __init__(self):
         super().__init__()
         kernel = torch.Tensor([1, 2, 1])
@@ -97,7 +100,7 @@ class Blur(nn.Module):
 
 
 class UpSampleBlock(nn.Module):
-
+    """Upsample block"""
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.up_block = nn.Sequential(
@@ -122,6 +125,7 @@ class Generator(nn.Module):
         :param z_dim: ``int``, latent space, in the paper equal 256
         """
         super().__init__()
+        # TODO: refactoring model for different image size
         assert img_size in [64, 128, 256, 512, 1024], 'image size must be [64, 128, 256, 512, 1024]'
         assert res_type in ['sle', 'gc'], 'res_type must be sle or gc'
         self.res_type = res_type
@@ -164,6 +168,10 @@ class Generator(nn.Module):
         )
 
     def forward(self, x):
+        """
+        :param x: ``Tensor([N, Z, 1, 1])``
+        :return: ``Tensor([N, C, H, W])``
+        """
         # input shape ℝ[N, z_dim, 1, 1] e.g. ℝ[1, 256, 1, 1]
         x = self.initial(x)
 
@@ -201,7 +209,7 @@ class Generator(nn.Module):
 
 
 class DownSampleBlock(nn.Module):
-
+    """Down sample block with addition"""
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.down_sample_left = nn.Sequential(
@@ -222,13 +230,17 @@ class DownSampleBlock(nn.Module):
         )
 
     def forward(self, x):
+        """
+        :param x: ``Tensor([N, C, H, W])``
+        :return: ``Tensor([N, C, H, W])``
+        """
         x_left = self.down_sample_left(x)
         x_right = self.down_sample_right(x)
         return x_left + x_right
 
 
 class SimpleDecoderBlock(nn.Module):
-    """Block for simple decoder"""
+    """Main block for simple decoders"""
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.simple_block = nn.Sequential(
@@ -246,6 +258,9 @@ class SimpleDecoderBlock(nn.Module):
 class SimpleDecoder(nn.Module):
     """Simple decoder"""
     def __init__(self, in_channels, num_blocks=4):
+        """
+        :param num_blocks: ``int``, number blocks
+        """
         super().__init__()
         self.num_blocks = num_blocks
         self.body = nn.ModuleList([])
@@ -267,44 +282,53 @@ class SimpleDecoder(nn.Module):
 class Discriminator(nn.Module):
     """Discriminator"""
     def __init__(self, img_size, img_channels=3):
+        """
+        :param img_size: ``2^n``, final image size, must be the same as the generator
+        :param img_channels: ``int``, 1 for grayscale, 3 for RGB, 4 for transparent
+        """
+        # TODO: refactoring model for different image size
         super().__init__()
         self.img_channels = img_channels
         self.initial = nn.Sequential(
-            nn.Conv2d(self.img_channels, self.img_channels, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(self.img_channels, self.img_channels, kernel_size=4, stride=2, padding=1),    # ℝ[3,512,512]
             nn.LeakyReLU(0.1),
-            nn.Conv2d(self.img_channels, 16, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(self.img_channels, 16, kernel_size=4, stride=2, padding=1),                   # ℝ[16,256,256]
             nn.BatchNorm2d(16),
             nn.LeakyReLU(0.1)
         )
-        self.down_sample_128 = DownSampleBlock(16, 32)
-        self.down_sample_64 = DownSampleBlock(32, 64)
-        self.down_sample_32 = DownSampleBlock(64, 128)
-        self.down_sample_16 = DownSampleBlock(128, 256)
-        self.down_sample_8 = DownSampleBlock(256, 512)
+        self.down_sample_128 = DownSampleBlock(16, 32)      # output shape ℝ[32,128,128]
+        self.down_sample_64 = DownSampleBlock(32, 64)       # output shape ℝ[64,64,64]
+        self.down_sample_32 = DownSampleBlock(64, 128)      # output shape ℝ[128,32,32]
+        self.down_sample_16 = DownSampleBlock(128, 256)     # output shape ℝ[256,16,16]
+        self.down_sample_8 = DownSampleBlock(256, 512)      # output shape ℝ[512,8,8]
 
-        self.decoder_part = SimpleDecoder(256)
-        self.decoder = SimpleDecoder(512)
+        self.decoder_part = SimpleDecoder(256)              # output shape ℝ[3,128,128]
+        self.decoder = SimpleDecoder(512)                   # output shape ℝ[3,128,128]
 
         self.real_fake_logits_out = nn.Sequential(
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=1, stride=1, padding=0),   # ℝ[512,8,8]
             nn.BatchNorm2d(512),
             nn.LeakyReLU(0.1),
-            nn.Conv2d(in_channels=512, out_channels=1, kernel_size=4, stride=1, padding=0)
+            nn.Conv2d(in_channels=512, out_channels=1, kernel_size=4, stride=1, padding=0)      # ℝ[1,5,5]
         )
 
     def forward(self, x):
-        x = self.initial(x)                 # output shape [N, 16, 256, 256]
-        x = self.down_sample_128(x)
-        x = self.down_sample_64(x)
-        x = self.down_sample_32(x)
-        x_16 = self.down_sample_16(x)
-        x_8 = self.down_sample_8(x_16)
+        """
+        :param x: ``Tensor([N, C, H, W])``
+        :return: ``List([[N,1,5,5], [N,3,128,128], [N,3,128,128])``
+        """
+        x = self.initial(x)                                 # output shape ℝ[N, 16, 256, 256]
+        x = self.down_sample_128(x)                         # output shape ℝ[N, 32, 128, 128]
+        x = self.down_sample_64(x)                          # output shape ℝ[N, 64, 64, 64]
+        x = self.down_sample_32(x)                          # output shape ℝ[N, 128, 32, 32]
+        x_16 = self.down_sample_16(x)                       # output shape ℝ[N, 256, 16, 16]
+        x_8 = self.down_sample_8(x_16)                      # output shape ℝ[N, 512, 8, 8]
 
-        crop_img_8 = center_crop_img(x_16, (8, 8), mode='bilinear')
+        crop_img_8 = center_crop_img(x_16, (8, 8), mode='bilinear')     # ℝ[N, 3, 8, 8]
 
-        decoded_img_128_part = self.decoder_part(crop_img_8)
-        decoded_img_128 = self.decoder(x_8)
+        decoded_img_128_part = self.decoder_part(crop_img_8)            # ℝ[N, 3, 128, 128]
+        decoded_img_128 = self.decoder(x_8)                             # ℝ[N, 3, 128, 128]
 
-        real_fake_logits_out = self.real_fake_logits_out(x_8)
+        real_fake_logits_out = self.real_fake_logits_out(x_8)           # ℝ[1, 5, 5]
 
         return real_fake_logits_out, decoded_img_128_part, decoded_img_128
