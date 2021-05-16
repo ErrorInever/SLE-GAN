@@ -133,4 +133,190 @@ Params size (MB): 39.19
 Estimated Total Size (MB): 282.06
 ----------------------------------------------------------------
 
+[Layers]
 
+Discriminator(
+  (initial): Sequential(
+    (0): Conv2d(3, 3, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (1): LeakyReLU(negative_slope=0.1)
+    (2): Conv2d(3, 16, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (3): BatchNorm2d(16, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (4): LeakyReLU(negative_slope=0.1)
+  )
+  (down_sample_128): DownSampleBlock(
+    (down_sample_left): Sequential(
+      (0): Blur()
+      (1): Conv2d(16, 32, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+      (2): BatchNorm2d(32, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (3): LeakyReLU(negative_slope=0.1)
+      (4): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (5): BatchNorm2d(32, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (6): LeakyReLU(negative_slope=0.1)
+    )
+    (down_sample_right): Sequential(
+      (0): Blur()
+      (1): AvgPool2d(kernel_size=2, stride=2, padding=0)
+      (2): Conv2d(16, 32, kernel_size=(1, 1), stride=(1, 1))
+      (3): BatchNorm2d(32, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (4): LeakyReLU(negative_slope=0.1)
+    )
+  )
+  (down_sample_64): DownSampleBlock(
+    (down_sample_left): Sequential(
+      (0): Blur()
+      (1): Conv2d(32, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+      (2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (3): LeakyReLU(negative_slope=0.1)
+      (4): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (5): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (6): LeakyReLU(negative_slope=0.1)
+    )
+    (down_sample_right): Sequential(
+      (0): Blur()
+      (1): AvgPool2d(kernel_size=2, stride=2, padding=0)
+      (2): Conv2d(32, 64, kernel_size=(1, 1), stride=(1, 1))
+      (3): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (4): LeakyReLU(negative_slope=0.1)
+    )
+  )
+  (down_sample_32): DownSampleBlock(
+    (down_sample_left): Sequential(
+      (0): Blur()
+      (1): Conv2d(64, 128, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+      (2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (3): LeakyReLU(negative_slope=0.1)
+      (4): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (6): LeakyReLU(negative_slope=0.1)
+    )
+    (down_sample_right): Sequential(
+      (0): Blur()
+      (1): AvgPool2d(kernel_size=2, stride=2, padding=0)
+      (2): Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1))
+      (3): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (4): LeakyReLU(negative_slope=0.1)
+    )
+  )
+  (down_sample_16): DownSampleBlock(
+    (down_sample_left): Sequential(
+      (0): Blur()
+      (1): Conv2d(128, 256, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+      (2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (3): LeakyReLU(negative_slope=0.1)
+      (4): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (5): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (6): LeakyReLU(negative_slope=0.1)
+    )
+    (down_sample_right): Sequential(
+      (0): Blur()
+      (1): AvgPool2d(kernel_size=2, stride=2, padding=0)
+      (2): Conv2d(128, 256, kernel_size=(1, 1), stride=(1, 1))
+      (3): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (4): LeakyReLU(negative_slope=0.1)
+    )
+  )
+  (down_sample_8): DownSampleBlock(
+    (down_sample_left): Sequential(
+      (0): Blur()
+      (1): Conv2d(256, 512, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+      (2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (3): LeakyReLU(negative_slope=0.1)
+      (4): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+      (5): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (6): LeakyReLU(negative_slope=0.1)
+    )
+    (down_sample_right): Sequential(
+      (0): Blur()
+      (1): AvgPool2d(kernel_size=2, stride=2, padding=0)
+      (2): Conv2d(256, 512, kernel_size=(1, 1), stride=(1, 1))
+      (3): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (4): LeakyReLU(negative_slope=0.1)
+    )
+  )
+  (decoder_part): SimpleDecoder(
+    (body): ModuleList(
+      (0): SimpleDecoderBlock(
+        (simple_block): Sequential(
+          (0): Upsample(scale_factor=2.0, mode=nearest)
+          (1): Blur()
+          (2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (3): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (4): GLU(dim=1)
+        )
+      )
+      (1): SimpleDecoderBlock(
+        (simple_block): Sequential(
+          (0): Upsample(scale_factor=2.0, mode=nearest)
+          (1): Blur()
+          (2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (3): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (4): GLU(dim=1)
+        )
+      )
+      (2): SimpleDecoderBlock(
+        (simple_block): Sequential(
+          (0): Upsample(scale_factor=2.0, mode=nearest)
+          (1): Blur()
+          (2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (3): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (4): GLU(dim=1)
+        )
+      )
+      (3): SimpleDecoderBlock(
+        (simple_block): Sequential(
+          (0): Upsample(scale_factor=2.0, mode=nearest)
+          (1): Blur()
+          (2): Conv2d(32, 6, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (3): BatchNorm2d(6, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (4): GLU(dim=1)
+        )
+      )
+    )
+  )
+  (decoder): SimpleDecoder(
+    (body): ModuleList(
+      (0): SimpleDecoderBlock(
+        (simple_block): Sequential(
+          (0): Upsample(scale_factor=2.0, mode=nearest)
+          (1): Blur()
+          (2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (3): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (4): GLU(dim=1)
+        )
+      )
+      (1): SimpleDecoderBlock(
+        (simple_block): Sequential(
+          (0): Upsample(scale_factor=2.0, mode=nearest)
+          (1): Blur()
+          (2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (3): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (4): GLU(dim=1)
+        )
+      )
+      (2): SimpleDecoderBlock(
+        (simple_block): Sequential(
+          (0): Upsample(scale_factor=2.0, mode=nearest)
+          (1): Blur()
+          (2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (3): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (4): GLU(dim=1)
+        )
+      )
+      (3): SimpleDecoderBlock(
+        (simple_block): Sequential(
+          (0): Upsample(scale_factor=2.0, mode=nearest)
+          (1): Blur()
+          (2): Conv2d(64, 6, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+          (3): BatchNorm2d(6, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (4): GLU(dim=1)
+        )
+      )
+    )
+  )
+  (real_fake_logits_out): Sequential(
+    (0): Conv2d(512, 512, kernel_size=(1, 1), stride=(1, 1))
+    (1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.1)
+    (3): Conv2d(512, 1, kernel_size=(4, 4), stride=(1, 1))
+  )
+)
