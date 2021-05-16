@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from kornia import filter2D
+from utils import center_crop_img
 
 
 class SLE(nn.Module):
@@ -197,3 +198,113 @@ class Generator(nn.Module):
             x = self.output(x)
 
         return x
+
+
+class DownSampleBlock(nn.Module):
+
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.down_sample_left = nn.Sequential(
+            Blur(),
+            nn.Conv2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(0.1),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(0.1)
+        )
+        self.down_sample_right = nn.Sequential(
+            Blur(),
+            nn.AvgPool2d(kernel_size=2),
+            nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(0.1)
+        )
+
+    def forward(self, x):
+        x_left = self.down_sample_left(x)
+        x_right = self.down_sample_right(x)
+        return x_left + x_right
+
+
+class SimpleDecoderBlock(nn.Module):
+    """Block for simple decoder"""
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.simple_block = nn.Sequential(
+            nn.Upsample(scale_factor=2.0, mode='nearest'),
+            Blur(),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.GLU(dim=1)
+        )
+
+    def forward(self, x):
+        return self.simple_block(x)
+
+
+class SimpleDecoder(nn.Module):
+    """Simple decoder"""
+    def __init__(self, in_channels, num_blocks=4):
+        super().__init__()
+        self.num_blocks = num_blocks
+        self.body = nn.ModuleList([])
+
+        for i in range(1, num_blocks+1):
+            if i != num_blocks:
+                self.body.append(SimpleDecoderBlock(in_channels, in_channels))
+                in_channels //= 2
+            else:
+                # last channel in last block must be even, after GLU layer 6 turn to 3 channel
+                self.body.append(SimpleDecoderBlock(in_channels, 6))
+
+    def forward(self, x):
+        for layer in self.body:
+            x = layer(x)
+        return x
+
+
+class Discriminator(nn.Module):
+    """Discriminator"""
+    def __init__(self, img_size, img_channels=3):
+        super().__init__()
+        self.img_channels = img_channels
+        self.initial = nn.Sequential(
+            nn.Conv2d(self.img_channels, self.img_channels, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(0.1),
+            nn.Conv2d(self.img_channels, 16, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(16),
+            nn.LeakyReLU(0.1)
+        )
+        self.down_sample_128 = DownSampleBlock(16, 32)
+        self.down_sample_64 = DownSampleBlock(32, 64)
+        self.down_sample_32 = DownSampleBlock(64, 128)
+        self.down_sample_16 = DownSampleBlock(128, 256)
+        self.down_sample_8 = DownSampleBlock(256, 512)
+
+        self.decoder_part = SimpleDecoder(512)
+        self.decoder = SimpleDecoder(512)
+
+        self.real_fake_logits_out = nn.Sequential(
+            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=1, stride=1, padding=0),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(0.1),
+            nn.Conv2d(in_channels=512, out_channels=1, kernel_size=4, stride=1, padding=0)
+        )
+
+    def forward(self, x):
+        x = self.initial(x)                 # output shape [N, 16, 256, 256]
+        x = self.down_sample_128(x)
+        x = self.down_sample_64(x)
+        x = self.down_sample_32(x)
+        x_16 = self.down_sample_16(x)
+        x_8 = self.down_sample_8(x_16)
+
+        crop_img_8 = center_crop_img(x_16, 8, mode='bilinear')
+
+        decoded_img_128_part = self.decoder_part(crop_img_8)
+        decoded_img_128 = self.decoder(x_8)
+
+        real_fake_logits_out = self.real_fake_logits_out(x_8)
+
+        return real_fake_logits_out, decoded_img_128_part, decoded_img_128
