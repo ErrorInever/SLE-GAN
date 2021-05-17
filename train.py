@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 from models.model import Generator, Discriminator
 from config import cfg
-from utils import set_seed
+from utils import set_seed, save_checkpoint, load_checkpoint, get_random_noise, print_epoch_time
 from data.dataset import ImgFolderDataset
 
 
@@ -25,6 +25,27 @@ def parse_args():
                         default=None, type=str)
     parser.print_help()
     return parser.parse_args()
+
+
+@print_epoch_time
+def train_one_epoch(gen, opt_gen, gen_scaler, dis, opt_dis, dis_scaler, dataloader, metric_logger, device,
+                    fixed_noise, epoch):
+    """
+    Train one epoch
+    :param gen: ``Generator``
+    :param opt_gen:
+    :param gen_scaler:
+    :param dis:
+    :param opt_dis:
+    :param dis_scaler:
+    :param dataloader:
+    :param metric_logger:
+    :param device:
+    :param fixed_noise:
+    :param epoch:
+    :return:
+    """
+    pass
 
 
 if __name__ == '__main__':
@@ -62,8 +83,8 @@ if __name__ == '__main__':
     dataloader = DataLoader(dataset, batch_size=cfg.BATCH_SIZE, shuffle=True, num_workers=2, drop_last=True,
                             pin_memory=True)
     # defining models
-    gen = Generator(img_size=cfg.IMG_SIZE, in_channels=cfg.IN_CHANNELS, img_channels=cfg.CHANNELS_IMG, z_dim=cfg.Z_DIMENSION,
-                    res_type=cfg.GEN_TYPE).to(device)
+    gen = Generator(img_size=cfg.IMG_SIZE, in_channels=cfg.IN_CHANNELS, img_channels=cfg.CHANNELS_IMG,
+                    z_dim=cfg.Z_DIMENSION, res_type=cfg.GEN_TYPE).to(device)
     dis = Discriminator(img_size=cfg.IMG_SIZE, img_channels=cfg.CHANNELS_IMG).to(device)
     # defining optimizers
     opt_gen = optim.Adam(params=gen.parameters(), lr=cfg.LEARNING_RATE, betas=(0.0, 0.99))
