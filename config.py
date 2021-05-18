@@ -31,6 +31,7 @@ __C.OUT_DIR = ''
 __C.PATH_TO_LOG_FILE = 'SLE-GC-GAN/data/logs/train.log'
 # Display results
 __C.NUM_SAMPLES = 16
+__C.FIXED_NOISE_SAMPLES = 16
 __C.FREQ = 100
 __C.RESUME_ID = None
 # Init logger
