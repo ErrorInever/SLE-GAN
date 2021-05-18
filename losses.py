@@ -22,4 +22,3 @@ def hinge_adv_loss(real_fake_logits_real, real_fake_logits_fake):
     real_loss = -1 * torch.mean(torch.minimum(torch.Tensor([0.0]), -1 + real_fake_logits_real))
     fake_loss = -1 * torch.mean(torch.minimum(torch.Tensor([0.0]), -1 - real_fake_logits_fake))
     return real_loss + fake_loss
-
