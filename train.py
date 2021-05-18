@@ -5,12 +5,16 @@ import time
 import torch
 import torch.optim as optim
 
-from torch.utils.data import DataLoader
+from kornia.geometry.transform import resize
+from kornia.geometry.transform.crop.crop2d import center_crop
 
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 from models.model import Generator, Discriminator
 from config import cfg
-from utils import set_seed, save_checkpoint, load_checkpoint, get_random_noise, print_epoch_time
+from utils import set_seed, save_checkpoint, load_checkpoint, get_random_noise, print_epoch_time, center_crop_img
 from data.dataset import ImgFolderDataset
+from losses import hinge_adv_loss, reconstruction_loss
 
 
 def parse_args():
@@ -28,24 +32,61 @@ def parse_args():
 
 
 @print_epoch_time
-def train_one_epoch(gen, opt_gen, gen_scaler, dis, opt_dis, dis_scaler, dataloader, metric_logger, device,
+def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataloader, metric_logger, device,
                     fixed_noise, epoch):
     """
     Train one epoch
-    :param gen: ``Generator``
-    :param opt_gen:
-    :param gen_scaler:
-    :param dis:
-    :param opt_dis:
-    :param dis_scaler:
-    :param dataloader:
-    :param metric_logger:
-    :param device:
-    :param fixed_noise:
-    :param epoch:
-    :return:
+    :param gen: ``Instance of models.model.Generator``, generator model
+    :param opt_gen: ``Instance of torch.optim``, optimizer for generator
+    :param scaler_gen: ``torch.cuda.amp.GradScaler()``, gradient scaler for generator
+    :param dis: ``Instance of models.model.Discriminator``, discriminator model
+    :param opt_dis: ``Instance of torch.optim``, optimizer for discriminator
+    :param scaler_dis: ``torch.cuda.amp.GradScaler()``, gradient scaler for discriminator
+    :param dataloader: ``Instance of torch.utils.data.DataLoader``, train dataloader
+    :param metric_logger: ``Instance of metrics.MetricLogger``, logger
+    :param device: ``Instance of torch.device``, cuda device
+    :param fixed_noise: ``Tensor([N, 1, Z, 1, 1])``, fixed noise for display result
+    :param epoch: ``int``, current epoch
     """
-    pass
+
+    loop = tqdm(dataloader, leave=True)
+    for batch_idx, real in enumerate(loop):
+        cur_batch_size = real.shape[0]
+
+        real = real.to(device)
+        real_cropped_128 = center_crop(real, size=(128, 128))
+        real_128 = resize(real, size=(128, 128))
+        noise = torch.randn(cur_batch_size, cfg.Z_DIMENSION, 1, 1).to(device)
+        # TODO: differentiable augmentation
+        # Train discriminator
+        with torch.cuda.amp.autocast():
+            # Reconstruction loss: we minimize divergence between [||G(f) - T(x)||]
+            # Hinge adversarial loss: -E[min(0, -1 + D(x)] - E[min(0, -1 + D(x_hat)] + reconstruction loss
+            fake = gen(noise)
+            real_fake_logits_real, decoded_real_img_cropped, decoded_real_img = dis(real)
+            real_fake_logits_fake, _, _ = dis(fake)
+            logits_loss = hinge_adv_loss(real_fake_logits_real, real_fake_logits_fake)
+            i_recons_loss = reconstruction_loss(real_128, decoded_real_img)
+            i_part_recons_loss = reconstruction_loss(real_cropped_128, decoded_real_img_cropped)
+            d_loss = logits_loss + i_recons_loss + i_part_recons_loss
+
+        opt_dis.zero_grad()
+        scaler_dis.scale(d_loss).backward()
+        scaler_dis.step(opt_dis)
+        scaler_dis.update()
+
+        # Train generator
+        with torch.cuda.amp.autocast():
+            # We maximize E[D(G(z))] or minimize the negative of that
+            g_loss = -1 * real_fake_logits_fake.mean()
+
+        opt_gen.zero_grad()
+        scaler_gen.scale(g_loss).backward()
+        scaler_gen.step(opt_gen)
+        scaler_gen.update()
+
+        # TODO metrics
+        # TODO fid
 
 
 if __name__ == '__main__':
@@ -93,7 +134,11 @@ if __name__ == '__main__':
     scaler_gen = torch.cuda.amp.GradScaler()
     scaler_dis = torch.cuda.amp.GradScaler()
 
-    # TODO: load models and resume training
+    if args.checkpoint:
+        fixed_noise, cfg.START_EPOCH = load_checkpoint(args.checkpoint, gen, opt_gen, scaler_gen,
+                                                       dis, opt_dis, scaler_dis, cfg.LEARNING_RATE)
+    else:
+        fixed_noise = get_random_noise(cfg.FIXED_NOISE_SAMPLES, cfg.Z_DIMENSION, device)
 
     gen.train()
     dis.train()
