@@ -97,8 +97,8 @@ if __name__ == '__main__':
 
     assert args.data_path, 'data path not specified'
 
-    if args.api:
-        os.environ["WANDB_API_KEY"] = args.api
+    if args.wandb_key:
+        os.environ["WANDB_API_KEY"] = args.wandb_key
 
     if args.wandb_id:
         cfg.WANDB_ID = args.wandb_id
