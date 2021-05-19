@@ -85,8 +85,12 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
         scaler_gen.step(opt_gen)
         scaler_gen.update()
 
-        # TODO metrics
-        # TODO fid
+        # TODO: metrics
+
+
+def evaluate(gen, inception_fid, real_dataloader, fake_dataloader, ):
+    # TODO dataloaders
+    pass
 
 
 if __name__ == '__main__':
