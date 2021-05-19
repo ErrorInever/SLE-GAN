@@ -75,9 +75,16 @@ class InceptionV3FID(nn.Module):
 
         return feature_map
 
-    def get_fid_score(self):
-        # TODO: get fid score
-        pass
+    def get_fid_score(self, real_dataloader, fake_dataloader):
+        real_encodes = self._get_encoded_stats(real_dataloader)
+        fake_encodes = self._get_encoded_stats(fake_dataloader)
+
+        real_mu, real_sigma = self._calculate_stats(real_encodes)
+        fake_mu, fake_sigma = self._calculate_stats(fake_encodes)
+
+        fid = self._calculate_fid(real_mu, real_sigma, fake_mu, fake_sigma)
+
+        return fid
 
 
 class SLE(nn.Module):
