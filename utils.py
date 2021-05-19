@@ -6,11 +6,12 @@ import tempfile
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-import cv2
 from tqdm import tqdm
 from config import cfg
 from kornia.geometry.transform.crop.crop2d import center_crop
 from mpl_toolkits.axes_grid1 import ImageGrid
+from torch.utils.data import DataLoader, RandomSampler, Subset
+
 
 logger = logging.getLogger(__name__)
 
@@ -136,3 +137,10 @@ def write_images(images, path=None):
         path = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg", dir=str(dir_path)).name
         plt.imsave(path, img.permute(1, 2, 0).numpy())
     return dir_path
+
+
+def get_sample_dataloader(dataset, num_samples, batch_size):
+    sample_ds = Subset(dataset, np.arange(num_samples))
+    sampler = RandomSampler(sample_ds)
+    dataloader = DataLoader(sample_ds, sampler=sampler, batch_size=batch_size)
+    return dataloader
