@@ -1,8 +1,35 @@
 import os
+
+import torch.tensor
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
 from config import cfg
+from kornia.geometry.transform import resize
+from kornia.enhance.normalize import normalize
+
+
+class FIDNoiseDataset(Dataset):
+    """Dataset for FID"""
+    def __init__(self, list_tensors):
+        """
+        :param list_tensors: ``List([1, C, H, W], ...)``
+        """
+        self.data = list_tensors
+
+    def __getitem__(self, idx):
+        """
+        Resizes and normalizes tensors for Inception_v3
+        :param idx: ``int``, index
+        :return: Tensor([C, H, W])
+        """
+        img = self.data[idx]
+        img = resize(img, size=(299, 299))
+        img = normalize(img, mean=torch.tensor([0.485, 0.456, 0.406]), std=torch.tensor([0.229, 0.224, 0.225]))
+        return img.squeeze(0)
+
+    def __len__(self):
+        return len(self.data)
 
 
 class ImgFolderDataset(Dataset):
