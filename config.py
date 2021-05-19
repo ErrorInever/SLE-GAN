@@ -27,12 +27,17 @@ __C.IN_CHANNELS = 512
 # Metrics
 __C.WANDB_ID = None
 # Paths and saves
+__C.DATASET_PATH = None
 __C.OUT_DIR = ''
 __C.PATH_TO_LOG_FILE = 'SLE-GC-GAN/data/logs/train.log'
 # Display results
 __C.NUM_SAMPLES = 16
 __C.FIXED_NOISE_SAMPLES = 16
 __C.FREQ = 100
+# FID
+__C.FID_NUM_SAMPLES = 256
+__C.FID_FREQ = 100
+# WANDB
 __C.RESUME_ID = None
 # Init logger
 logger = logging.getLogger()
