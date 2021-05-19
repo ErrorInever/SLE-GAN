@@ -2,9 +2,12 @@ import torch
 import random
 import logging
 import os
+import tempfile
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+import cv2
+from tqdm import tqdm
 from config import cfg
 from kornia.geometry.transform.crop.crop2d import center_crop
 from mpl_toolkits.axes_grid1 import ImageGrid
@@ -117,3 +120,19 @@ def print_epoch_time(f):
         print("epoch time: %2.1f min" % ((te-ts)/60))
         return result
     return timed
+
+
+def write_images(images, path=None):
+    """
+    Writes images to disk
+    :param images: ``Tensor([N, C, H, W])``, images
+    :param path: ``str``, path where images will be stored
+    :return: ``str``, path
+    """
+    images_list = (images - images.min())/(images.max() - images.min())
+    path = cfg.OUT_DIR if path is None else path
+    dir_path = tempfile.mkdtemp(dir=path)
+    for img in tqdm(images_list, total=len(images_list)):
+        path = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg", dir=str(dir_path)).name
+        plt.imsave(path, img.permute(1, 2, 0).numpy())
+    return dir_path
