@@ -5,6 +5,7 @@ from tqdm import tqdm
 from scipy.linalg import sqrtm
 from kornia import filter2D
 from utils import center_crop_img
+from config import cfg
 from torchvision.models.inception import inception_v3
 
 
@@ -14,10 +15,10 @@ class InceptionV3FID(nn.Module):
         super().__init__()
         self.device = device
         self.model = inception_v3(pretrained=True, progress=True, transform_input=True).to(self.device)
-        self.model.eval()
         self.fc = self.model.fc
         self.model.fc = nn.Sequential()
         self.softmax = nn.Softmax(dim=1)
+        self.model.eval()
 
     def forward(self, x):
         """
@@ -61,17 +62,17 @@ class InceptionV3FID(nn.Module):
         :param device: ``Instance of torch.device``, cuda device
         :param num_classes: ``int``, number of classes of classifier, default = 1000
         """
-        num_img = len(dataloader)
+        num_img = len(dataloader.dataset)
         feature_map = np.zeros((num_img, 2048))
         predictions = np.zeros((num_img, num_classes))
-
         loop = tqdm(dataloader, leave=True)
         for batch_idx, batch in enumerate(loop):
             batch = batch.to(self.device)
             batch_size = batch.shape[0]
             i = batch_idx * batch_size
             j = i + batch_size
-            feature_map[i:j], predictions[i:j] = self.forward(batch)
+            with torch.no_grad():
+                feature_map[i:j], predictions[i:j] = self.forward(batch)
 
         return feature_map
 
