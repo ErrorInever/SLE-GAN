@@ -5,7 +5,6 @@ from tqdm import tqdm
 from scipy.linalg import sqrtm
 from kornia import filter2D
 from utils import center_crop_img
-from config import cfg
 from torchvision.models.inception import inception_v3
 
 
