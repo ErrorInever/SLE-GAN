@@ -6,15 +6,14 @@ import torch
 import torch.optim as optim
 from kornia.geometry.transform import resize
 from kornia.geometry.transform.crop.crop2d import center_crop
-
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 from models.model import Generator, Discriminator, InceptionV3FID
 from config import cfg
-from utils import (set_seed, save_checkpoint, load_checkpoint, get_random_noise, print_epoch_time, center_crop_img,
-                   get_sample_dataloader)
+from utils import set_seed, save_checkpoint, load_checkpoint, get_random_noise, print_epoch_time, get_sample_dataloader
 from data.dataset import ImgFolderDataset, FIDNoiseDataset
 from losses import hinge_adv_loss, reconstruction_loss
+from metrics import MetricLogger
 
 
 def parse_args():
@@ -49,11 +48,9 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
     :param fixed_noise: ``Tensor([N, 1, Z, 1, 1])``, fixed noise for display result
     :param epoch: ``int``, current epoch
     """
-
     loop = tqdm(dataloader, leave=True)
     for batch_idx, real in enumerate(loop):
         cur_batch_size = real.shape[0]
-
         real = real.to(device)
         real_cropped_128 = center_crop(real, size=(128, 128))
         real_128 = resize(real, size=(128, 128))
@@ -86,21 +83,28 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
         scaler_gen.step(opt_gen)
         scaler_gen.update()
 
+        # Eval and metrics
         if fid_score:
             if epoch % cfg.FID_FREQ == 0:
                 # TODO: test fid on GPU
                 fid = evaluate(gen, fid_model, device)
-                # TODO: display fid metric_logger
+                metric_logger.log_fid(fid)
+        if batch_idx % cfg.LOG_FREQ == 0:
+            metric_logger.log(g_loss, d_loss, logits_loss, i_recons_loss, i_part_recons_loss)
+        if batch_idx % cfg.LOG_IMAGE_FREQ == 0:
+            with torch.no_grad():
+                fixed_fakes = gen(fixed_noise)
+                metric_logger.log_image(fixed_fakes, cfg.NUM_SAMPLES_IMAGES, epoch, batch_idx, normalize=True)
 
-        # Metrics
-        if batch_idx % cfg.FREQ == 0:
-            # TODO: display status
-            pass
+        loop.set_postfix(
+            d_loss=d_loss.item(),
+            g_loss=g_loss.item()
+        )
 
 
 def evaluate(gen, fid_model, device):
     """
-    Evaluate
+    Fid evaluate
     :param gen: Generator
     :param fid_model: Inception_v3 model
     :return: ``float``, fid score
@@ -147,8 +151,7 @@ if __name__ == '__main__':
 
     if args.device == 'gpu':
         device = torch.device('cuda')
-    # elif args.device == 'tpu':
-    #     device = xm.xla_device()
+    # TODO: device for TPU
     elif args.device is None and not torch.cuda.is_available():
         logger.error(f"device:{args.device}", exc_info=True)
         raise ValueError('Device not specified and gpu is not available')
@@ -183,5 +186,11 @@ if __name__ == '__main__':
     gen.train()
     dis.train()
 
+    metric_logger = MetricLogger(cfg.PROJECT_VERSION_NAME)
+
     for epoch in range(cfg.START_EPOCH, cfg.END_EPOCH):
-        pass
+        train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataloader, metric_logger, device,
+                        fixed_noise, epoch, fid_model, fid_score=args.fid)
+        if cfg.SAVE:
+            if epoch % cfg.SAVE_EPOCH_FREQ == 0:
+                save_checkpoint(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, fixed_noise, epoch)
