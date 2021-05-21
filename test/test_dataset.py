@@ -7,6 +7,6 @@ if __name__ == '__main__':
     dataset = ImgFolderDataset(path)
     dataloader = DataLoader(dataset, batch_size=16, num_workers=2, shuffle=True)
 
-    for batch in dataloader:
-        show_batch(batch, shape=(4, 4))
-        break
+    batch = next(iter(dataloader))
+    show_batch(batch, size=8, shape=(8, 8), save='/home/mirage/')
+
