@@ -58,7 +58,6 @@ class InceptionV3FID(nn.Module):
         """
         Get encoded stats and probabilities from pool3_ft layer of inception_v3
         :param dataloader: ``Instance of torch.utils.data.DataLoader``, dataloader
-        :param device: ``Instance of torch.device``, cuda device
         :param num_classes: ``int``, number of classes of classifier, default = 1000
         """
         num_img = len(dataloader.dataset)
@@ -76,6 +75,12 @@ class InceptionV3FID(nn.Module):
         return feature_map
 
     def get_fid_score(self, real_dataloader, fake_dataloader):
+        """
+        get fid score
+        :param real_dataloader: ``torch.data.Dataloader``, dataloader of real data
+        :param fake_dataloader: ``torch.data.Dataloader``, dataloader of fake data
+        :return: ``float``, fid score
+        """
         real_encodes = self._get_encoded_stats(real_dataloader)
         fake_encodes = self._get_encoded_stats(fake_dataloader)
 
@@ -199,7 +204,7 @@ class UpSampleBlock(nn.Module):
 
 
 class Generator(nn.Module):
-
+    """Generator"""
     def __init__(self, img_size, in_channels=512, img_channels=3, z_dim=256, res_type='sle'):
         """
         :param img_size: ``2^n``, final resolution
