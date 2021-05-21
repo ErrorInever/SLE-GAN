@@ -29,27 +29,25 @@ __C.WANDB_ID = None
 # Paths and saves
 __C.DATASET_PATH = None
 __C.OUT_DIR = ''
-__C.PATH_TO_LOG_FILE = 'data/logs/train.log'
+__C.SAVE = True
+__C.SAVE_EPOCH_FREQ = 1
 # Display results
-__C.NUM_SAMPLES = 16
+__C.NUM_SAMPLES_IMAGES = 16
 __C.FIXED_NOISE_SAMPLES = 16
-__C.FREQ = 100
+__C.LOG_FREQ = 100
+__C.LOG_IMAGE_FREQ = 100
 # FID
-__C.FID_NUM_SAMPLES = 256
+__C.FID_NUM_SAMPLES = 256   # number of images for fid dataset
 __C.FID_FREQ = 100
 # WANDB
 __C.RESUME_ID = None
 # Init logger
 logger = logging.getLogger()
 c_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(__C.PATH_TO_LOG_FILE, mode='a', encoding='utf-8')
 
 c_handler.setLevel(logging.INFO)
-f_handler.setLevel(logging.ERROR)
 c_format = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
 f_format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 c_handler.setFormatter(c_format)
-f_handler.setFormatter(f_format)
 logger.addHandler(c_handler)
-logger.addHandler(f_handler)
 logger.setLevel(logging.INFO)
