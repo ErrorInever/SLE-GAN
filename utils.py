@@ -2,11 +2,9 @@ import torch
 import random
 import logging
 import os
-import tempfile
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 from config import cfg
 from kornia.geometry.transform.crop.crop2d import center_crop
 from mpl_toolkits.axes_grid1 import ImageGrid
@@ -51,6 +49,17 @@ def set_seed(seed):
 
 
 def save_checkpoint(gen, opt_gen, gen_scaler, dis, opt_dis, dis_scaler, fixed_noise, epoch):
+    """
+    Save checkpoint
+    :param gen: ``Instance of models.model.Generator``, generator model
+    :param opt_gen: ``Instance of torch.optim``, optimizer for generator
+    :param gen_scaler: ``torch.cuda.amp.GradScaler()``, gradient scaler for generator
+    :param dis: ``Instance of models.model.Discriminator``, discriminator model
+    :param opt_dis: ``Instance of torch.optim``, optimizer for discriminator
+    :param dis_scaler: ``torch.cuda.amp.GradScaler()``, gradient scaler for discriminator
+    :param fixed_noise: ``Tensor([N, 1, Z, 1, 1])``, fixed noise for display result
+    :param epoch: ``int``, current epoch
+    """
     logger.info(f"=> Saving model")
     checkpoint = {
         'gen': gen.state_dict(),
@@ -68,6 +77,18 @@ def save_checkpoint(gen, opt_gen, gen_scaler, dis, opt_dis, dis_scaler, fixed_no
 
 
 def load_checkpoint(ckpt, gen, opt_gen, gen_scaler, dis, opt_dis, dis_scaler, lr):
+    """
+    Load checkpoint
+    :param ckpt: ``str``, path to checkpoint.pth.tar
+    :param gen: ``Instance of models.model.Generator``, generator model
+    :param opt_gen: ``Instance of torch.optim``, optimizer for generator
+    :param gen_scaler: ``torch.cuda.amp.GradScaler()``, gradient scaler for generator
+    :param dis: ``Instance of models.model.Discriminator``, discriminator model
+    :param opt_dis: ``Instance of torch.optim``, optimizer for discriminator
+    :param dis_scaler: ``torch.cuda.amp.GradScaler()``, gradient scaler for discriminator
+    :param lr: ``float``, learning rate
+    :return: [``Tensor([N, 1, Z, 1, 1])``, ``int``], return fixed noise and epoch
+    """
     logger.info(f"=> Loading checkpoint")
     checkpoint = torch.load(ckpt, map_location="cuda")
     gen.load_state_dict(checkpoint["gen"])
@@ -86,7 +107,6 @@ def load_checkpoint(ckpt, gen, opt_gen, gen_scaler, dis, opt_dis, dis_scaler, lr
         param_group["lr"] = lr
 
     logger.info(f"=>Success checkpoint loaded from {ckpt}")
-
     return fixed_noise, epoch
 
 
@@ -105,10 +125,8 @@ def show_batch(images, size=14, shape=(6, 6), save=None):
     for ax, image in zip(grid, images_list):
         ax.imshow(image.permute(1, 2, 0))
         ax.axis('off')
-
     if save:
         plt.savefig(save + 'name.png')
-
     plt.show()
 
 
@@ -123,23 +141,14 @@ def print_epoch_time(f):
     return timed
 
 
-def write_images(images, path=None):
-    """
-    Writes images to disk
-    :param images: ``Tensor([N, C, H, W])``, images
-    :param path: ``str``, path where images will be stored
-    :return: ``str``, path
-    """
-    images_list = (images - images.min())/(images.max() - images.min())
-    path = cfg.OUT_DIR if path is None else path
-    dir_path = tempfile.mkdtemp(dir=path)
-    for img in tqdm(images_list, total=len(images_list)):
-        path = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg", dir=str(dir_path)).name
-        plt.imsave(path, img.permute(1, 2, 0).numpy())
-    return dir_path
-
-
 def get_sample_dataloader(dataset, num_samples, batch_size):
+    """
+    Get dataloader of random real data
+    :param dataset: ``torch.data.dataset``, real dataset
+    :param num_samples: ``int``, number images
+    :param batch_size: ``int``, batch size
+    :return: ``torch.data.dataloader``
+    """
     sample_ds = Subset(dataset, np.arange(num_samples))
     sampler = RandomSampler(sample_ds)
     dataloader = DataLoader(sample_ds, sampler=sampler, batch_size=batch_size)
