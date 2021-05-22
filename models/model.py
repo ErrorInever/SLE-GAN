@@ -126,74 +126,12 @@ class SLE(nn.Module):
         return self.sle_block(x_low) * x_high
 
 
-class GC(nn.Module):
-    """
-    Global context
-    Based on this work: https://arxiv.org/abs/1904.11492
-    """
-    def __init__(self, in_channels, ratio=4):
-        super().__init__()
-        self.out_channels = int(in_channels * ratio)
-        self.conv_mask = nn.Conv2d(in_channels, 1, kernel_size=1)
-        self.softmax_d2 = nn.Softmax(dim=2)
-        self.transform = nn.Sequential(
-            nn.Conv2d(in_channels, self.out_channels, kernel_size=1),
-            nn.LayerNorm([self.out_channels, 1, 1]),
-            nn.Conv2d(self.out_channels, in_channels, kernel_size=1)
-        )
-
-    def _getcontext(self, x):
-        """
-        Context modeling block
-        :param x: Tensor([N, C, H, W])
-        :return: Tensor([N, C, 1, 1])
-        """
-        N, C, H, W = x.size()
-        x_hat = x
-        x_hat = x_hat.view(N, C, H * W)     # ℝ[N, C, H, W] --> ℝ[N, C, H * W]
-        x_hat = x_hat.unsqueeze(1)          # ℝ[N, C, H * W] --> ℝ[N, 1, C, H * W]
-        cm = self.conv_mask(x)              # ℝ[N, 1, C, H * W] --> ℝ[N, 1, H, W]
-        cm = cm.view(N, 1, H * W)           # ℝ[N, 1, H, W] --> ℝ[N, 1, H * W]
-        cm = self.softmax_d2(cm)            # softmax on second dimension
-        cm = cm.unsqueeze(3)                # ℝ[N, 1, H * W] --> ℝ[N, 1, H * W, 1]
-        context = torch.matmul(x_hat, cm)   # ℝ[N, 1, C, H * W] ⊗ ℝ[N, 1, H * W, 1] = ℝ[N, 1, C, 1]
-        context = context.view(N, C, 1, 1)  # ℝ[N, 1, C, 1] --> ℝ[N, C, 1, 1]
-        return context
-
-    def forward(self, x):
-        """
-        :param x: Tensor([N, C, H, W])
-        :return: Tensor([N, C, H, W])
-        """
-        context = self._getcontext(x)           # ℝ[N, C, H, W] --> ℝ[N, C, 1, 1]
-        transform = self.transform(context)     # ℝ[N, C, 1, 1]
-        fusion = x + transform                  # ℝ[N, C, H, W] ⊕ ℝ[N, C, 1, 1] = ℝ[N, C, H, W]
-        return fusion
-
-
-class Blur(nn.Module):
-    """
-    Blur for up sampling
-    Info: https://richzhang.github.io/antialiased-cnns/
-    """
-    def __init__(self):
-        super().__init__()
-        kernel = torch.Tensor([1, 2, 1])
-        self.register_buffer('kernel', kernel)
-
-    def forward(self, x):
-        kernel = self.kernel
-        kernel = kernel[None, None, :] * kernel[None, :, None]
-        return filter2D(x, kernel, normalized=True)
-
-
 class UpSampleBlock(nn.Module):
     """Upsample block"""
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.up_block = nn.Sequential(
             nn.Upsample(scale_factor=2.0, mode='nearest'),
-            Blur(),
             nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.GLU(dim=1)
@@ -222,6 +160,7 @@ class Generator(nn.Module):
         self.res_type = res_type
         self.resolution = img_size
         self.img_channels = img_channels
+
         self.initial = nn.Sequential(
             nn.ConvTranspose2d(z_dim, in_channels, kernel_size=4, stride=1, padding=0),  # 1x1 to 4x4
             nn.BatchNorm2d(in_channels),
@@ -243,20 +182,10 @@ class Generator(nn.Module):
             self.up_sample_1024 = UpSampleBlock(3, 6)       # output shape ℝ[3x1024x1024]
 
         # SLE blocks
-        if self.res_type == 'sle':
-            self.sle_8_to_128 = SLE(512, 64)
-            self.sle_16_to_256 = SLE(512, 32)
-            if img_size >= 512:
-                self.sle_32_to_512 = SLE(256, 3)
-
-        # Global context blocks
-        elif self.res_type == 'gc':
-            self.gc_16_512 = GC(512)
-            self.gc_32_256 = GC(256)
-            self.gc_64_128 = GC(128)
-            self.gc_128_64 = GC(64)
-            if img_size >= 256:
-                self.gc_256_32 = GC(32)
+        self.sle_8_to_128 = SLE(512, 64)
+        self.sle_16_to_256 = SLE(512, 32)
+        if img_size >= 512:
+            self.sle_32_to_512 = SLE(256, 3)
 
         # Out
         self.output = nn.Sequential(
@@ -289,30 +218,7 @@ class Generator(nn.Module):
                 if self.img_size == 1024:
                     x = self.up_sample_1024(x)
 
-            x = self.output(x)
-
-        elif self.res_type == 'gc':
-            x = self.up_sample_8(x)
-            x = self.up_sample_16(x)
-            x = self.gc_16_512(x)
-            x = self.up_sample_32(x)
-            x = self.gc_32_256(x)
-            x = self.up_sample_64(x)
-            x = self.gc_64_128(x)
-            x = self.up_sample_128(x)
-            x = self.gc_128_64(x)
-
-            if self.img_size >= 256:
-                x = self.up_sample_256(x)
-                x = self.gc_256_32(x)
-
-                if self.img_size >= 512:
-                    x = self.up_sample_512(x)
-
-                    if self.img_size == 1024:
-                        x = self.up_sample_1024(x)
-
-            x = self.output(x)
+        x = self.output(x)
 
         return x
 
@@ -322,7 +228,6 @@ class DownSampleBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.down_sample_left = nn.Sequential(
-            Blur(),
             nn.Conv2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.LeakyReLU(0.1),
@@ -331,7 +236,6 @@ class DownSampleBlock(nn.Module):
             nn.LeakyReLU(0.1)
         )
         self.down_sample_right = nn.Sequential(
-            Blur(),
             nn.AvgPool2d(kernel_size=2),
             nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0),
             nn.BatchNorm2d(out_channels),
@@ -354,7 +258,6 @@ class SimpleDecoderBlock(nn.Module):
         super().__init__()
         self.simple_block = nn.Sequential(
             nn.Upsample(scale_factor=2.0, mode='nearest'),
-            Blur(),
             nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.GLU(dim=1)
