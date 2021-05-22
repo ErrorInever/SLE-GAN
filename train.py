@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument('--checkpoint', dest='checkpoint', help='path to checkpoint.pth.tar', default=None, type=str)
     parser.add_argument('--device', dest='device', help='use device: gpu, tpu. Default use gpu if available',
                         default='gpu', type=str)
-    parser.add_argument('--fid', dest='fid', help='display fid score', action='store_true', type=bool)
+    parser.add_argument('--fid', dest='fid', help='display fid score', action='store_true')
     parser.add_argument('--wandb_id', dest='wandb_id', help='wand metric id for resume', default=None, type=str)
     parser.add_argument('--wandb_key', dest='wandb_key', help='use this option if you run it from kaggle, '
                                                               'input api key', default=None, type=str)
