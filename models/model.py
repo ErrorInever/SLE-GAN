@@ -201,22 +201,21 @@ class Generator(nn.Module):
         # input shape ℝ[N, z_dim, 1, 1] e.g. ℝ[1, 256, 1, 1]
         x = self.initial(x)
 
-        if self.res_type == 'sle':
-            x_8 = self.up_sample_8(x)
-            x_16 = self.up_sample_16(x_8)
-            x_32 = self.up_sample_32(x_16)
-            x_64 = self.up_sample_64(x_32)
-            x_128 = self.up_sample_128(x_64)
-            sle_x_128 = self.sle_8_to_128(x_8, x_128)
-            x_256 = self.up_sample_256(sle_x_128)
-            x = self.sle_16_to_256(x_16, x_256)
+        x_8 = self.up_sample_8(x)
+        x_16 = self.up_sample_16(x_8)
+        x_32 = self.up_sample_32(x_16)
+        x_64 = self.up_sample_64(x_32)
+        x_128 = self.up_sample_128(x_64)
+        sle_x_128 = self.sle_8_to_128(x_8, x_128)
+        x_256 = self.up_sample_256(sle_x_128)
+        x = self.sle_16_to_256(x_16, x_256)
 
-            if self.img_size >= 512:
-                x_512 = self.up_sample_512(x)
-                x = self.sle_32_to_512(x_32, x_512)
+        if self.img_size >= 512:
+            x_512 = self.up_sample_512(x)
+            x = self.sle_32_to_512(x_32, x_512)
 
-                if self.img_size == 1024:
-                    x = self.up_sample_1024(x)
+            if self.img_size == 1024:
+                x = self.up_sample_1024(x)
 
         x = self.output(x)
 
