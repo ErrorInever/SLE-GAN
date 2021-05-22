@@ -213,9 +213,18 @@ class Generator(nn.Module):
         :param z_dim: ``int``, latent space, in the paper equal 256
         """
         super().__init__()
-        # TODO: refactoring model for different image size
+        self.img_size = img_size
         assert img_size in [64, 128, 256, 512, 1024], 'image size must be [64, 128, 256, 512, 1024]'
         assert res_type in ['sle', 'gc'], 'res_type must be sle or gc'
+
+        if img_size < 256 and res_type == 'sle':
+            raise ValueError('Image size with SLE blocks must be 256 or larger')
+
+        if img_size < 64 and res_type == 'gc':
+            raise ValueError('Image size with GC blocks must be 64 or larger')
+
+        self.factors_res = {"64": 128, "128": 64, "256": 32, "512": 3, "1024": 3}
+        self.in_features = self.factors_res[str(img_size)]
         self.res_type = res_type
         self.resolution = img_size
         self.img_channels = img_channels
@@ -226,32 +235,40 @@ class Generator(nn.Module):
         )
         # Upsample blocks
         # input shape [256x4x4]
-        self.up_sample_8 = UpSampleBlock(256, 1024)     # output shape ℝ[512x8x8]
-        self.up_sample_16 = UpSampleBlock(512, 1024)    # output shape ℝ[512x16x16]
-        self.up_sample_32 = UpSampleBlock(512, 512)     # output shape ℝ[256x32x32]
-        self.up_sample_64 = UpSampleBlock(256, 256)     # output shape ℝ[128x64x64]
-        self.up_sample_128 = UpSampleBlock(128, 128)    # output shape ℝ[64x128x128]
-        self.up_sample_256 = UpSampleBlock(64, 64)      # output shape ℝ[32x256x256]
-        self.up_sample_512 = UpSampleBlock(32, 6)       # output shape ℝ[3x512x512]
-        self.up_sample_1024 = UpSampleBlock(3, 6)       # output shape ℝ[3x1024x1024]
+        self.up_sample_8 = UpSampleBlock(256, 1024)         # output shape ℝ[512x8x8]
+        self.up_sample_16 = UpSampleBlock(512, 1024)        # output shape ℝ[512x16x16]
+        self.up_sample_32 = UpSampleBlock(512, 512)         # output shape ℝ[256x32x32]
+        self.up_sample_64 = UpSampleBlock(256, 256)         # output shape ℝ[128x64x64]
+
+        if img_size >= 64:
+            self.up_sample_128 = UpSampleBlock(128, 128)    # output shape ℝ[64x128x128]
+        if img_size >= 256:
+            self.up_sample_256 = UpSampleBlock(64, 64)      # output shape ℝ[32x256x256]
+        if img_size >= 512:
+            self.up_sample_512 = UpSampleBlock(32, 6)       # output shape ℝ[3x512x512]
+        if img_size == 1024:
+            self.up_sample_1024 = UpSampleBlock(3, 6)       # output shape ℝ[3x1024x1024]
 
         # SLE blocks
         if self.res_type == 'sle':
             self.sle_8_to_128 = SLE(512, 64)
             self.sle_16_to_256 = SLE(512, 32)
-            self.sle_32_to_512 = SLE(256, 3)
+            if img_size >= 512:
+                self.sle_32_to_512 = SLE(256, 3)
 
         # Global context blocks
         elif self.res_type == 'gc':
             self.gc_16_512 = GC(512)
             self.gc_32_256 = GC(256)
             self.gc_64_128 = GC(128)
-            self.gc_128_64 = GC(64)
-            self.gc_256_32 = GC(32)
+            if img_size >= 128:
+                self.gc_128_64 = GC(64)
+            if img_size >= 256:
+                self.gc_256_32 = GC(32)
 
         # Out
         self.output = nn.Sequential(
-            nn.Conv2d(3, self.img_channels, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(self.in_features, self.img_channels, kernel_size=3, stride=1, padding=1),
             nn.Tanh()
         )
 
@@ -271,11 +288,16 @@ class Generator(nn.Module):
             x_128 = self.up_sample_128(x_64)
             sle_x_128 = self.sle_8_to_128(x_8, x_128)
             x_256 = self.up_sample_256(sle_x_128)
-            sle_x_256 = self.sle_16_to_256(x_16, x_256)
-            x_512 = self.up_sample_512(sle_x_256)
-            sle_x512 = self.sle_32_to_512(x_32, x_512)
-            x_1024 = self.up_sample_1024(sle_x512)
-            x = self.output(x_1024)
+            x = self.sle_16_to_256(x_16, x_256)
+
+            if self.img_size >= 512:
+                x_512 = self.up_sample_512(x)
+                x = self.sle_32_to_512(x_32, x_512)
+
+                if self.img_size == 1024:
+                    x = self.up_sample_1024(x)
+
+            x = self.output(x)
 
         elif self.res_type == 'gc':
             x = self.up_sample_8(x)
@@ -285,12 +307,21 @@ class Generator(nn.Module):
             x = self.gc_32_256(x)
             x = self.up_sample_64(x)
             x = self.gc_64_128(x)
-            x = self.up_sample_128(x)
-            x = self.gc_128_64(x)
-            x = self.up_sample_256(x)
-            x = self.gc_256_32(x)
-            x = self.up_sample_512(x)
-            x = self.up_sample_1024(x)
+
+            if self.img_size >= 128:
+                x = self.up_sample_128(x)
+                x = self.gc_128_64(x)
+
+                if self.img_size >= 256:
+                    x = self.up_sample_256(x)
+                    x = self.gc_256_32(x)
+
+                    if self.img_size >= 512:
+                        x = self.up_sample_512(x)
+
+                        if self.img_size == 1024:
+                            x = self.up_sample_1024(x)
+
             x = self.output(x)
 
         return x
