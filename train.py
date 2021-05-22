@@ -69,7 +69,7 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
             d_loss = logits_loss + i_recons_loss + i_part_recons_loss
 
         opt_dis.zero_grad()
-        scaler_dis.scale(d_loss).backward()
+        scaler_dis.scale(d_loss).backward(retain_graph=True)
         scaler_dis.step(opt_dis)
         scaler_dis.update()
 
