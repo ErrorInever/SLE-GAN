@@ -62,7 +62,7 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
             # Hinge adversarial loss: -E[min(0, -1 + D(x)] - E[min(0, -1 + D(x_hat)] + reconstruction loss
             fake = gen(noise)
             real_fake_logits_real, decoded_real_img_cropped, decoded_real_img = dis(real)
-            real_fake_logits_fake, _, _ = dis(fake.deatch())
+            real_fake_logits_fake, _, _ = dis(fake.detach())
             logits_loss = hinge_adv_loss(real_fake_logits_real, real_fake_logits_fake)
             i_recons_loss = reconstruction_loss(real_128, decoded_real_img)
             i_part_recons_loss = reconstruction_loss(real_cropped_128, decoded_real_img_cropped)
