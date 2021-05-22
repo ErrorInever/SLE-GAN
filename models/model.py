@@ -214,16 +214,10 @@ class Generator(nn.Module):
         """
         super().__init__()
         self.img_size = img_size
-        assert img_size in [64, 128, 256, 512, 1024], 'image size must be [64, 128, 256, 512, 1024]'
+        assert img_size in [256, 512, 1024], 'image size must be [256, 512, 1024]'
         assert res_type in ['sle', 'gc'], 'res_type must be sle or gc'
 
-        if img_size < 256 and res_type == 'sle':
-            raise ValueError('Image size with SLE blocks must be 256 or larger')
-
-        if img_size < 64 and res_type == 'gc':
-            raise ValueError('Image size with GC blocks must be 64 or larger')
-
-        self.factors_res = {"64": 128, "128": 64, "256": 32, "512": 3, "1024": 3}
+        self.factors_res = {"256": 32, "512": 3, "1024": 3}
         self.in_features = self.factors_res[str(img_size)]
         self.res_type = res_type
         self.resolution = img_size
@@ -239,9 +233,8 @@ class Generator(nn.Module):
         self.up_sample_16 = UpSampleBlock(512, 1024)        # output shape ℝ[512x16x16]
         self.up_sample_32 = UpSampleBlock(512, 512)         # output shape ℝ[256x32x32]
         self.up_sample_64 = UpSampleBlock(256, 256)         # output shape ℝ[128x64x64]
+        self.up_sample_128 = UpSampleBlock(128, 128)    # output shape ℝ[64x128x128]
 
-        if img_size >= 64:
-            self.up_sample_128 = UpSampleBlock(128, 128)    # output shape ℝ[64x128x128]
         if img_size >= 256:
             self.up_sample_256 = UpSampleBlock(64, 64)      # output shape ℝ[32x256x256]
         if img_size >= 512:
@@ -261,8 +254,7 @@ class Generator(nn.Module):
             self.gc_16_512 = GC(512)
             self.gc_32_256 = GC(256)
             self.gc_64_128 = GC(128)
-            if img_size >= 128:
-                self.gc_128_64 = GC(64)
+            self.gc_128_64 = GC(64)
             if img_size >= 256:
                 self.gc_256_32 = GC(32)
 
@@ -307,20 +299,18 @@ class Generator(nn.Module):
             x = self.gc_32_256(x)
             x = self.up_sample_64(x)
             x = self.gc_64_128(x)
+            x = self.up_sample_128(x)
+            x = self.gc_128_64(x)
 
-            if self.img_size >= 128:
-                x = self.up_sample_128(x)
-                x = self.gc_128_64(x)
+            if self.img_size >= 256:
+                x = self.up_sample_256(x)
+                x = self.gc_256_32(x)
 
-                if self.img_size >= 256:
-                    x = self.up_sample_256(x)
-                    x = self.gc_256_32(x)
+                if self.img_size >= 512:
+                    x = self.up_sample_512(x)
 
-                    if self.img_size >= 512:
-                        x = self.up_sample_512(x)
-
-                        if self.img_size == 1024:
-                            x = self.up_sample_1024(x)
+                    if self.img_size == 1024:
+                        x = self.up_sample_1024(x)
 
             x = self.output(x)
 
@@ -405,19 +395,26 @@ class Discriminator(nn.Module):
         :param img_size: ``2^n``, final image size, must be the same as the generator
         :param img_channels: ``int``, 1 for grayscale, 3 for RGB, 4 for transparent
         """
-        # TODO: refactoring model for different image size
         super().__init__()
+        self.img_size = img_size
+        assert img_size in [256, 512, 1024], 'image size must be [256, 512, 1024]'
+        self.factors_res = {"256": 64, "512": 32, "1024": 16}
+        self.out_features = self.factors_res[str(img_size)]
         self.img_channels = img_channels
         self.initial = nn.Sequential(
             nn.Conv2d(self.img_channels, self.img_channels, kernel_size=4, stride=2, padding=1),    # ℝ[3,512,512]
             nn.LeakyReLU(0.1),
-            nn.Conv2d(self.img_channels, 16, kernel_size=4, stride=2, padding=1),                   # ℝ[16,256,256]
-            nn.BatchNorm2d(16),
+            nn.Conv2d(self.img_channels, self.out_features, kernel_size=4, stride=2, padding=1),                   # ℝ[16,256,256]
+            nn.BatchNorm2d(self.out_features),
             nn.LeakyReLU(0.1)
         )
-        self.down_sample_128 = DownSampleBlock(16, 32)      # output shape ℝ[32,128,128]
-        self.down_sample_64 = DownSampleBlock(32, 64)       # output shape ℝ[64,64,64]
-        self.down_sample_32 = DownSampleBlock(64, 128)      # output shape ℝ[128,32,32]
+        if self.img_size == 1024:
+            self.down_sample_128 = DownSampleBlock(16, 32)      # output shape ℝ[32,128,128]
+        if self.img_size >= 512:
+            self.down_sample_64 = DownSampleBlock(32, 64)       # output shape ℝ[64,64,64]
+        if self.img_size >= 256:
+            self.down_sample_32 = DownSampleBlock(64, 128)      # output shape ℝ[128,32,32]
+
         self.down_sample_16 = DownSampleBlock(128, 256)     # output shape ℝ[256,16,16]
         self.down_sample_8 = DownSampleBlock(256, 512)      # output shape ℝ[512,8,8]
 
@@ -437,9 +434,13 @@ class Discriminator(nn.Module):
         :return: ``List([[N,1,5,5], [N,3,128,128], [N,3,128,128])``
         """
         x = self.initial(x)                                 # output shape ℝ[N, 16, 256, 256]
-        x = self.down_sample_128(x)                         # output shape ℝ[N, 32, 128, 128]
-        x = self.down_sample_64(x)                          # output shape ℝ[N, 64, 64, 64]
-        x = self.down_sample_32(x)                          # output shape ℝ[N, 128, 32, 32]
+        if self.img_size == 1024:
+            x = self.down_sample_128(x)                         # output shape ℝ[N, 32, 128, 128]
+        if self.img_size >= 512:
+            x = self.down_sample_64(x)                          # output shape ℝ[N, 64, 64, 64]
+        if self.img_size >= 256:
+            x = self.down_sample_32(x)                          # output shape ℝ[N, 128, 32, 32]
+
         x_16 = self.down_sample_16(x)                       # output shape ℝ[N, 256, 16, 16]
         x_8 = self.down_sample_8(x_16)                      # output shape ℝ[N, 512, 8, 8]
 
