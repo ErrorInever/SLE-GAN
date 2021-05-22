@@ -28,8 +28,8 @@ class InceptionV3FID(nn.Module):
         features = x.data.cpu().numpy()
         # prediction
         x = self.fc(x)
-        prob = self.softmax(x)
-        return features, prob
+        #   prob = self.softmax(x)
+        return features
 
     @staticmethod
     def _calculate_stats(feature_map):
@@ -62,7 +62,7 @@ class InceptionV3FID(nn.Module):
         """
         num_img = len(dataloader.dataset)
         feature_map = np.zeros((num_img, 2048))
-        predictions = np.zeros((num_img, num_classes))
+        # predictions = np.zeros((num_img, num_classes))
         loop = tqdm(dataloader, leave=True)
         for batch_idx, batch in enumerate(loop):
             batch = batch.to(self.device)
@@ -70,7 +70,7 @@ class InceptionV3FID(nn.Module):
             i = batch_idx * batch_size
             j = i + batch_size
             with torch.no_grad():
-                feature_map[i:j], predictions[i:j] = self.forward(batch)
+                feature_map[i:j] = self.forward(batch)
 
         return feature_map
 
