@@ -20,8 +20,8 @@ __C.LEARNING_RATE = 1e-3
 __C.BATCH_SIZE = 8
 # SHAPES
 __C.Z_DIMENSION = 256
-__C.IMG_SIZE = 1024
 __C.CHANNELS_IMG = 3
+__C.IMG_SIZE = 1024         # final image size
 # Models features
 __C.IN_CHANNELS = 512
 # Metrics
