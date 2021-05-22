@@ -404,7 +404,7 @@ class Discriminator(nn.Module):
         self.initial = nn.Sequential(
             nn.Conv2d(self.img_channels, self.img_channels, kernel_size=4, stride=2, padding=1),    # ℝ[3,512,512]
             nn.LeakyReLU(0.1),
-            nn.Conv2d(self.img_channels, self.out_features, kernel_size=4, stride=2, padding=1),                   # ℝ[16,256,256]
+            nn.Conv2d(self.img_channels, self.out_features, kernel_size=4, stride=2, padding=1),    # ℝ[16,256,256]
             nn.BatchNorm2d(self.out_features),
             nn.LeakyReLU(0.1)
         )
