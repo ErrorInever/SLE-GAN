@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-def reconstruction_loss(f, x):
+def reconstruction_loss(x, f):
     """
     Reconstruction loss
     :param f: ``Tensor([C, H, W])``, decoded image
@@ -10,7 +10,7 @@ def reconstruction_loss(f, x):
     :return: ``float``, divergence between decoded and real images
     """
     l1 = nn.L1Loss()
-    return l1(f, x)
+    return l1(x, f)
 
 
 def hinge_adv_loss(real_fake_logits_real, real_fake_logits_fake):
