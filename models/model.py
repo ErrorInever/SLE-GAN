@@ -143,26 +143,23 @@ class UpSampleBlock(nn.Module):
 
 class Generator(nn.Module):
     """Generator"""
-    def __init__(self, img_size, in_channels=512, img_channels=3, z_dim=256, res_type='sle'):
+    def __init__(self, img_size, in_channels=512, img_channels=3, z_dim=256):
         """
-        :param img_size: ``2^n``, final resolution
+        :param img_size: ``2^n``, final resolution, should be the power of two
         :param in_channels: ``int``, number of input channels of generator
-        :param img_channels: ``int``, 1 for grayscale, 3 for RGB, 4 for transparent
-        :param z_dim: ``int``, latent space, in the paper equal 256
+        :param img_channels: ``int``, 1 for grayscale, 3 for RGB, 4 for transparent, default=3
+        :param z_dim: ``int``, size of latent space
         """
         super().__init__()
-        self.img_size = img_size
         assert img_size in [256, 512, 1024], 'image size must be [256, 512, 1024]'
-        assert res_type in ['sle', 'gc'], 'res_type must be sle or gc'
 
+        self.img_size = img_size
         self.factors_res = {"256": 32, "512": 3, "1024": 3}
-        self.in_features = self.factors_res[str(img_size)]
-        self.res_type = res_type
-        self.resolution = img_size
+        self.in_features = self.factors_res[str(self.img_size)]
         self.img_channels = img_channels
 
         self.initial = nn.Sequential(
-            nn.ConvTranspose2d(z_dim, in_channels, kernel_size=4, stride=1, padding=0),  # 1x1 to 4x4
+            nn.ConvTranspose2d(z_dim, in_channels, kernel_size=4, stride=1),  # 1x1 to 4x4
             nn.BatchNorm2d(in_channels),
             nn.GLU(dim=1)
         )
@@ -172,7 +169,7 @@ class Generator(nn.Module):
         self.up_sample_16 = UpSampleBlock(512, 1024)        # output shape ℝ[512x16x16]
         self.up_sample_32 = UpSampleBlock(512, 512)         # output shape ℝ[256x32x32]
         self.up_sample_64 = UpSampleBlock(256, 256)         # output shape ℝ[128x64x64]
-        self.up_sample_128 = UpSampleBlock(128, 128)    # output shape ℝ[64x128x128]
+        self.up_sample_128 = UpSampleBlock(128, 128)        # output shape ℝ[64x128x128]
 
         if img_size >= 256:
             self.up_sample_256 = UpSampleBlock(64, 64)      # output shape ℝ[32x256x256]
