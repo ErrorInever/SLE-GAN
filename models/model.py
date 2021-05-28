@@ -265,12 +265,13 @@ class SimpleDecoderBlock(nn.Module):
 
 class SimpleDecoder(nn.Module):
     """Simple decoder"""
-    def __init__(self, in_channels, num_blocks=4):
+    def __init__(self, in_channels, out_channels=3, num_blocks=4):
         """
         :param num_blocks: ``int``, number blocks
         """
         super().__init__()
         self.num_blocks = num_blocks
+        self.out_channels = out_channels
         self.body = nn.ModuleList([])
 
         for i in range(1, num_blocks+1):
@@ -278,13 +279,44 @@ class SimpleDecoder(nn.Module):
                 self.body.append(SimpleDecoderBlock(in_channels, in_channels))
                 in_channels //= 2
             else:
-                # last channel in last block must be even, after GLU layer 6 turn to 3 channel
-                self.body.append(SimpleDecoderBlock(in_channels, 6))
+                self.body.append(SimpleDecoderBlock(in_channels, self.out_channels * 2))
 
     def forward(self, x):
         for layer in self.body:
             x = layer(x)
+        # TODO: add Tanh()?
         return x
+
+
+class InputBlockDiscriminator(nn.Module):
+    """Input block for Discriminator"""
+    def __init__(self, in_features, out_features, factor):
+        super().__init__()
+        self.in_features = in_features
+        self.intermediate_features = max(3, out_features // 2)
+        self.out_features = out_features
+        self.factor = factor
+
+        self.conv_1_stride = 1 if factor <= 2 else 2
+        self.conv_2_stride = 1 if factor == 1 else 2
+
+        self.body = nn.Sequential(
+            nn.Conv2d(self.in_features, self.intermediate_features, kernel_size=4,
+                      stride=self.conv_1_stride, padding=1),
+            nn.LeakyReLU(0.1),
+            nn.Conv2d(self.intermediate_features, self.out_features, kernel_size=4,
+                      stride=self.conv_2_stride, padding=1),    # ℝ[3,512,512]
+            nn.BatchNorm2d(self.out_features),
+            nn.LeakyReLU(0.1)
+        )
+
+    def forward(self, x):
+        """
+        :param x: ``Tensor([N, C, H, W])``
+        :return: ``Tensor(N, C, H, W)``
+        """
+        # FIXME: output shape
+        return self.body(x)     # ℝ[3,512,512]
 
 
 class Discriminator(nn.Module):
@@ -295,27 +327,25 @@ class Discriminator(nn.Module):
         :param img_channels: ``int``, 1 for grayscale, 3 for RGB, 4 for transparent
         """
         super().__init__()
-        self.img_size = img_size
         assert img_size in [256, 512, 1024], 'image size must be [256, 512, 1024]'
-        self.factors_res = {"256": 64, "512": 32, "1024": 16}
-        self.out_features = self.factors_res[str(img_size)]
-        self.img_channels = img_channels
-        self.initial = nn.Sequential(
-            nn.Conv2d(self.img_channels, self.img_channels, kernel_size=4, stride=2, padding=1),    # ℝ[3,512,512]
-            nn.LeakyReLU(0.1),
-            nn.Conv2d(self.img_channels, self.out_features, kernel_size=4, stride=2, padding=1),    # ℝ[16,256,256]
-            nn.BatchNorm2d(self.out_features),
-            nn.LeakyReLU(0.1)
-        )
-        if self.img_size == 1024:
-            self.down_sample_128 = DownSampleBlock(16, 32)      # output shape ℝ[32,128,128]
-        if self.img_size >= 512:
-            self.down_sample_64 = DownSampleBlock(32, 64)       # output shape ℝ[64,64,64]
-        if self.img_size >= 256:
-            self.down_sample_32 = DownSampleBlock(64, 128)      # output shape ℝ[128,32,32]
 
-        self.down_sample_16 = DownSampleBlock(128, 256)     # output shape ℝ[256,16,16]
-        self.down_sample_8 = DownSampleBlock(256, 512)      # output shape ℝ[512,8,8]
+        self.img_size = img_size
+        self.img_channels = img_channels
+
+        self.factor_features = {"256": 32, "512": 3, "1024": 3}
+        self.in_features = self.factor_features[str(img_size)]
+        self.out_features = self.factor_features[str(img_size)]
+
+        self.factor_down_sample = {"256": 1, "512": 2, "1024": 4}
+        self.ds_factor = self.factor_down_sample[str(img_size)]
+
+        self.initial = InputBlockDiscriminator(img_channels, self.out_features, self.ds_factor)
+
+        self.down_sample_128 = DownSampleBlock(self.in_features, 64)      # output shape ℝ[32,128,128]
+        self.down_sample_64 = DownSampleBlock(64, 128)       # output shape ℝ[64,64,64]
+        self.down_sample_32 = DownSampleBlock(128, 256)      # output shape ℝ[128,32,32]
+        self.down_sample_16 = DownSampleBlock(256, 512)     # output shape ℝ[256,16,16]
+        self.down_sample_8 = DownSampleBlock(512, 512)      # output shape ℝ[512,8,8]
 
         self.decoder_part = SimpleDecoder(256)              # output shape ℝ[3,128,128]
         self.decoder = SimpleDecoder(512)                   # output shape ℝ[3,128,128]
@@ -333,17 +363,13 @@ class Discriminator(nn.Module):
         :return: ``List([[N,1,5,5], [N,3,128,128], [N,3,128,128])``
         """
         x = self.initial(x)                                 # output shape ℝ[N, 16, 256, 256]
-        if self.img_size == 1024:
-            x = self.down_sample_128(x)                         # output shape ℝ[N, 32, 128, 128]
-        if self.img_size >= 512:
-            x = self.down_sample_64(x)                          # output shape ℝ[N, 64, 64, 64]
-        if self.img_size >= 256:
-            x = self.down_sample_32(x)                          # output shape ℝ[N, 128, 32, 32]
-
+        x = self.down_sample_128(x)                         # output shape ℝ[N, 32, 128, 128]
+        x = self.down_sample_64(x)                          # output shape ℝ[N, 64, 64, 64]
+        x = self.down_sample_32(x)                          # output shape ℝ[N, 128, 32, 32]
         x_16 = self.down_sample_16(x)                       # output shape ℝ[N, 256, 16, 16]
         x_8 = self.down_sample_8(x_16)                      # output shape ℝ[N, 512, 8, 8]
 
-        crop_img_8 = center_crop_img(x_16, (8, 8), mode='bilinear')     # ℝ[N, 3, 8, 8]
+        crop_img_8 = center_crop_img(x_16, (8, 8), mode='bilinear')     # ℝ[N, 512, 8, 8]
 
         decoded_img_128_part = self.decoder_part(crop_img_8)            # ℝ[N, 3, 128, 128]
         decoded_img_128 = self.decoder(x_8)                             # ℝ[N, 3, 128, 128]
