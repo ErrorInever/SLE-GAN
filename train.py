@@ -97,7 +97,7 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
                 fid = evaluate(gen, fid_model, device)
                 metric_logger.log_fid(fid)
         if batch_idx % cfg.LOG_FREQ == 0:
-            metric_logger.log(g_loss, d_loss, logits_loss, i_recons_loss, i_part_recons_loss)
+            metric_logger.log(g_loss, d_loss, hinge_loss, i_recon_loss, i_part_recon_loss)
         if batch_idx % cfg.LOG_IMAGE_FREQ == 0:
             with torch.no_grad():
                 fixed_fakes = gen(fixed_noise)
