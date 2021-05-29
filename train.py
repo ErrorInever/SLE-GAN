@@ -78,18 +78,14 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
         scaler_dis.step(opt_dis)
         scaler_dis.update()
 
+        real = real.to(device)
+        noise = torch.randn(cur_batch_size, cfg.Z_DIMENSION, 1, 1).to(device)
         # Train generator
-        opt_gen.zero_grad()
         with torch.cuda.amp.autocast():
             # We maximize E[D(G(z))] or minimize the negative of that
-            fake = gen(noise)
-            real_fake_logits_fake_images, _, _ = dis(fake)
-            real_fake_logits_real_images, _, _ = dis(real)
-            g_loss = hinge_adv_loss(real_fake_logits_fake_images, real_fake_logits_real_images)
+            # TODO: train generator
+            pass
 
-        scaler_gen.scale(g_loss).backward()
-        scaler_gen.step(opt_gen)
-        scaler_gen.update()
 
         # Eval and metrics
         if fid_score:
