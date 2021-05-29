@@ -52,21 +52,26 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
     for batch_idx, real in enumerate(loop):
         cur_batch_size = real.shape[0]
         real = real.to(device)
+
         real_cropped_128 = center_crop(real, size=(128, 128))
         real_128 = resize(real, size=(128, 128))
         noise = torch.randn(cur_batch_size, cfg.Z_DIMENSION, 1, 1).to(device)
         # TODO: differentiable augmentation
         # Train discriminator
         with torch.cuda.amp.autocast():
+            with torch.no_grad():
+                fake = gen(noise)
             # Reconstruction loss: we minimize divergence between [||G(f) - T(x)||]
             # Hinge adversarial loss: -E[min(0, -1 + D(x)] - E[min(0, -1 + D(x_hat)] + reconstruction loss
-            fake = gen(noise)
-            real_fake_logits_real, decoded_real_img_cropped, decoded_real_img = dis(real)
-            real_fake_logits_fake, _, _ = dis(fake.detach())
-            logits_loss = hinge_adv_loss(real_fake_logits_real, real_fake_logits_fake)
-            i_recons_loss = reconstruction_loss(real_128, decoded_real_img)
-            i_part_recons_loss = reconstruction_loss(real_cropped_128, decoded_real_img_cropped)
-            d_loss = logits_loss + i_recons_loss + i_part_recons_loss
+            real_fake_logits_real_images, decoded_real_img_part, decoded_real_img = dis(real)
+            real_fake_logits_fake_images, _, _ = dis(fake)
+
+            # D LOSS
+            hinge_loss = hinge_adv_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
+            i_recon_loss = reconstruction_loss(real_128, decoded_real_img)
+            i_part_recon_loss = reconstruction_loss(real_cropped_128, decoded_real_img_part)
+
+            d_loss = hinge_loss + i_recon_loss + i_part_recon_loss
 
         opt_dis.zero_grad()
         scaler_dis.scale(d_loss).backward()
@@ -74,12 +79,13 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
         scaler_dis.update()
 
         # Train generator
+        opt_gen.zero_grad()
         with torch.cuda.amp.autocast():
             # We maximize E[D(G(z))] or minimize the negative of that
-            gen_real_fake_logits_fake, _, _ = dis(fake)
-            g_loss = -torch.mean(gen_real_fake_logits_fake)
+            fake = gen(noise)
+            real_fake_logits_fake_images, _, _ = dis(fake)
+            g_loss = -1 * torch.mean(real_fake_logits_fake_images)
 
-        opt_gen.zero_grad()
         scaler_gen.scale(g_loss).backward()
         scaler_gen.step(opt_gen)
         scaler_gen.update()
@@ -169,7 +175,7 @@ if __name__ == '__main__':
                             pin_memory=True)
     # defining models
     gen = Generator(img_size=cfg.IMG_SIZE, in_channels=cfg.IN_CHANNELS, img_channels=cfg.CHANNELS_IMG,
-                    z_dim=cfg.Z_DIMENSION, res_type=cfg.GEN_TYPE).to(device)
+                    z_dim=cfg.Z_DIMENSION).to(device)
     dis = Discriminator(img_size=cfg.IMG_SIZE, img_channels=cfg.CHANNELS_IMG).to(device)
     # defining optimizers
     opt_gen = optim.Adam(params=gen.parameters(), lr=cfg.LEARNING_RATE, betas=(0.0, 0.99))
