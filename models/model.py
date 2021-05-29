@@ -3,7 +3,6 @@ import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
 from scipy.linalg import sqrtm
-from kornia import filter2D
 from utils import center_crop_img
 from torchvision.models.inception import inception_v3
 
@@ -138,6 +137,10 @@ class UpSampleBlock(nn.Module):
         )
 
     def forward(self, x):
+        """
+        :param x: ``Tensor([N, C, H, W])``
+        :return: ``Tensor(N, C, H, W)``
+        """
         return self.up_block(x)
 
 
@@ -288,25 +291,13 @@ class SimpleDecoder(nn.Module):
         return x
 
 
-class InputBlockDiscriminator(nn.Module):
-    """Input block for Discriminator"""
-    def __init__(self, in_features, out_features, factor):
+class InputPartBlock(nn.Module):
+    """Block for InputBLockDiscriminator"""
+    def __init__(self, in_features, out_features):
         super().__init__()
-        self.in_features = in_features
-        self.intermediate_features = max(3, out_features // 2)
-        self.out_features = out_features
-        self.factor = factor
-
-        self.conv_1_stride = 1 if factor <= 2 else 2
-        self.conv_2_stride = 1 if factor == 1 else 2
-
-        self.body = nn.Sequential(
-            nn.Conv2d(self.in_features, self.intermediate_features, kernel_size=4,
-                      stride=self.conv_1_stride, padding=1),
-            nn.LeakyReLU(0.1),
-            nn.Conv2d(self.intermediate_features, self.out_features, kernel_size=4,
-                      stride=self.conv_2_stride, padding=1),    # ℝ[3,512,512]
-            nn.BatchNorm2d(self.out_features),
+        self.initial = nn.Sequential(
+            # TODO: add blur
+            nn.Conv2d(in_features, out_features, kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.1)
         )
 
@@ -315,15 +306,46 @@ class InputBlockDiscriminator(nn.Module):
         :param x: ``Tensor([N, C, H, W])``
         :return: ``Tensor(N, C, H, W)``
         """
-        # FIXME: output shape
-        return self.body(x)     # ℝ[3,512,512]
+        return self.initial(x)
+
+
+class InputBlockDiscriminator(nn.Module):
+    """Input block for Discriminator"""
+    def __init__(self, in_features, out_features, factor):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+
+        self.initial = nn.ModuleList([])
+
+        if factor != 0:
+            for i in range(1, factor + 1):
+                if i == 1:
+                    self.initial.append(InputPartBlock(in_features, out_features))
+                else:
+                    self.initial.append(InputPartBlock(out_features, out_features))
+
+        else:
+            self.initial.append(nn.Sequential(
+                nn.Conv2d(in_features, out_features, kernel_size=1),
+                nn.LeakyReLU(0.1)
+            ))
+
+    def forward(self, x):
+        """
+        :param x: ``Tensor([N, C, H, W])``
+        :return: ``Tensor(N, C, H, W)``
+        """
+        for layer in self.initial:
+            x = layer(x)
+        return x
 
 
 class Discriminator(nn.Module):
     """Discriminator"""
     def __init__(self, img_size, img_channels=3):
         """
-        :param img_size: ``2^n``, final image size, must be the same as the generator
+        :param img_size: ``2^n``, must be the same as output of the generator
         :param img_channels: ``int``, 1 for grayscale, 3 for RGB, 4 for transparent
         """
         super().__init__()
@@ -331,30 +353,24 @@ class Discriminator(nn.Module):
 
         self.img_size = img_size
         self.img_channels = img_channels
-
-        self.factor_features = {"256": 32, "512": 3, "1024": 3}
-        self.in_features = self.factor_features[str(img_size)]
-        self.out_features = self.factor_features[str(img_size)]
-
-        self.factor_down_sample = {"256": 1, "512": 2, "1024": 4}
+        self.factor_down_sample = {"256": 0, "512": 1, "1024": 2}
         self.ds_factor = self.factor_down_sample[str(img_size)]
 
-        self.initial = InputBlockDiscriminator(img_channels, self.out_features, self.ds_factor)
+        self.initial = InputBlockDiscriminator(img_channels, 16, self.ds_factor)    # output shape ℝ[16,256,256]
+        self.down_sample_128 = DownSampleBlock(16, 32)                              # output shape ℝ[32,128,128]
+        self.down_sample_64 = DownSampleBlock(32, 64)                               # output shape ℝ[64,64,64]
+        self.down_sample_32 = DownSampleBlock(64, 128)                              # output shape ℝ[128,32,32]
+        self.down_sample_16 = DownSampleBlock(128, 256)                             # output shape ℝ[256,16,16]
+        self.down_sample_8 = DownSampleBlock(256, 512)                              # output shape ℝ[512,8,8]
 
-        self.down_sample_128 = DownSampleBlock(self.in_features, 64)      # output shape ℝ[32,128,128]
-        self.down_sample_64 = DownSampleBlock(64, 128)       # output shape ℝ[64,64,64]
-        self.down_sample_32 = DownSampleBlock(128, 256)      # output shape ℝ[128,32,32]
-        self.down_sample_16 = DownSampleBlock(256, 512)     # output shape ℝ[256,16,16]
-        self.down_sample_8 = DownSampleBlock(512, 512)      # output shape ℝ[512,8,8]
-
-        self.decoder_part = SimpleDecoder(256)              # output shape ℝ[3,128,128]
-        self.decoder = SimpleDecoder(512)                   # output shape ℝ[3,128,128]
+        self.decoder_part = SimpleDecoder(256)                                      # output shape ℝ[3,128,128]
+        self.decoder = SimpleDecoder(512)                                           # output shape ℝ[3,128,128]
 
         self.real_fake_logits_out = nn.Sequential(
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=1, stride=1, padding=0),   # ℝ[512,8,8]
+            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=1, stride=1, padding=0),  # ℝ[512,8,8]
             nn.BatchNorm2d(512),
             nn.LeakyReLU(0.1),
-            nn.Conv2d(in_channels=512, out_channels=1, kernel_size=4, stride=1, padding=0)      # ℝ[1,5,5]
+            nn.Conv2d(in_channels=512, out_channels=1, kernel_size=4, stride=1, padding=0)     # output shape ℝ[1,5,5]
         )
 
     def forward(self, x):
@@ -369,11 +385,11 @@ class Discriminator(nn.Module):
         x_16 = self.down_sample_16(x)                       # output shape ℝ[N, 256, 16, 16]
         x_8 = self.down_sample_8(x_16)                      # output shape ℝ[N, 512, 8, 8]
 
-        crop_img_8 = center_crop_img(x_16, (8, 8), mode='bilinear')     # ℝ[N, 512, 8, 8]
+        crop_img_8 = center_crop_img(x_16, (8, 8), mode='nearest')     # ℝ[N, 512, 8, 8]
 
-        decoded_img_128_part = self.decoder_part(crop_img_8)            # ℝ[N, 3, 128, 128]
-        decoded_img_128 = self.decoder(x_8)                             # ℝ[N, 3, 128, 128]
+        decoded_img_128_part = self.decoder_part(crop_img_8)            # ℝ[N, 512, 8, 8] --> ℝ[N, 3, 128, 128]
+        decoded_img_128 = self.decoder(x_8)                             # ℝ[N, 512, 8, 8] --> ℝ[N, 3, 128, 128]
 
-        real_fake_logits_out = self.real_fake_logits_out(x_8)           # ℝ[1, 5, 5]
+        real_fake_logits_out = self.real_fake_logits_out(x_8)           # ℝ[N, 512, 8, 8] --> ℝ[1, 5, 5]
 
         return real_fake_logits_out, decoded_img_128_part, decoded_img_128
