@@ -18,14 +18,15 @@ from metrics import MetricLogger
 
 def parse_args():
     parser = argparse.ArgumentParser(description='SLE-GC-GAN')
-    parser.add_argument('--data_path', dest='data_path', help='path to dataset folder', default=None, type=str)
-    parser.add_argument('--out_dir', dest='out_dir', help='path where to save files', default=None, type=str)
-    parser.add_argument('--checkpoint', dest='checkpoint', help='path to checkpoint.pth.tar', default=None, type=str)
-    parser.add_argument('--device', dest='device', help='use device: gpu, tpu. Default use gpu if available',
+    parser.add_argument('--data_path', dest='data_path', help='Path to dataset folder', default=None, type=str)
+    parser.add_argument('--out_dir', dest='out_dir', help='Path where to save files', default=None, type=str)
+    parser.add_argument('--checkpoint', dest='checkpoint', help='Path to checkpoint.pth.tar', default=None, type=str)
+    parser.add_argument('--device', dest='device', help='Use device: gpu, tpu. Default use gpu if available',
                         default='gpu', type=str)
-    parser.add_argument('--fid', dest='fid', help='display fid score', action='store_true')
-    parser.add_argument('--wandb_id', dest='wandb_id', help='wand metric id for resume', default=None, type=str)
-    parser.add_argument('--wandb_key', dest='wandb_key', help='use this option if you run it from kaggle, '
+    parser.add_argument('--diff_aug', dest='diff_aug', help='Use differentiable augmentation', action='store_true')
+    parser.add_argument('--fid', dest='fid', help='Display fid score', action='store_true')
+    parser.add_argument('--wandb_id', dest='wandb_id', help='Wand metric id for resume', default=None, type=str)
+    parser.add_argument('--wandb_key', dest='wandb_key', help='Use this option if you run it from kaggle, '
                                                               'input api key', default=None, type=str)
     parser.print_help()
     return parser.parse_args()
@@ -47,24 +48,24 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
     :param device: ``Instance of torch.device``, cuda device
     :param fixed_noise: ``Tensor([N, 1, Z, 1, 1])``, fixed noise for display result
     :param epoch: ``int``, current epoch
+    :param fid_model: model for calculate fid score
+    :param fid_score: ``bool``, if True - calculate fid score otherwise no
     """
     loop = tqdm(dataloader, leave=True)
     for batch_idx, real in enumerate(loop):
         cur_batch_size = real.shape[0]
         real = real.to(device)
         real.requires_grad_()
-
         real_cropped_128 = center_crop(real, size=(128, 128))
         real_128 = resize(real, size=(128, 128))
         noise = torch.randn(cur_batch_size, cfg.Z_DIMENSION, 1, 1).to(device)
-        # TODO: add differentiable augmentation
         # Train discriminator
         with torch.cuda.amp.autocast():
             with torch.no_grad():
                 fake = gen(noise)
             real_fake_logits_real_images, decoded_real_img_part, decoded_real_img = dis(real)
             real_fake_logits_fake_images, _, _ = dis(fake.detach())
-            # maximize
+            # maximize divergence between real and fake data
             # TODO: try dual contrastive loss instead simple hinge
             divergence = hinge_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
             i_recon_loss = reconstruction_loss_mse(real_128, decoded_real_img)
@@ -80,7 +81,7 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
         noise = torch.randn(cur_batch_size, cfg.Z_DIMENSION, 1, 1).to(device)
         # Train generator
         with torch.cuda.amp.autocast():
-            # We maximize E[D(G(z))]
+            # maximize E[D(G(z))], also we can minimize the negative of that
             fake = gen(noise)
             fake_logits, _, _ = dis(fake)
             g_loss = torch.mean(fake_logits)
@@ -88,7 +89,6 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
         scaler_gen.scale(g_loss).backward()
         scaler_gen.step(opt_gen)
         scaler_gen.update()
-
         # Eval and metrics
         if fid_score:
             if epoch % cfg.FID_FREQ == 0:
@@ -96,7 +96,7 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
                 fid = evaluate(gen, fid_model, device)
                 metric_logger.log_fid(fid)
         if batch_idx % cfg.LOG_FREQ == 0:
-            metric_logger.log(g_loss, d_loss, hinge_loss, i_recon_loss, i_part_recon_loss)
+            metric_logger.log(g_loss, d_loss, divergence, i_recon_loss, i_part_recon_loss)
         if batch_idx % cfg.LOG_IMAGE_FREQ == 0:
             with torch.no_grad():
                 fixed_fakes = gen(fixed_noise)
@@ -136,7 +136,7 @@ def evaluate(gen, fid_model, device):
 
 if __name__ == '__main__':
     set_seed(8989)
-    # TODO: save config for resume training
+
     logger = logging.getLogger('train')
     args = parse_args()
 
@@ -177,7 +177,7 @@ if __name__ == '__main__':
     # defining models
     gen = Generator(img_size=cfg.IMG_SIZE, in_channels=cfg.IN_CHANNELS, img_channels=cfg.CHANNELS_IMG,
                     z_dim=cfg.Z_DIMENSION).to(device)
-    dis = Discriminator(img_size=cfg.IMG_SIZE, img_channels=cfg.CHANNELS_IMG, diff_aug=True).to(device)
+    dis = Discriminator(img_size=cfg.IMG_SIZE, img_channels=cfg.CHANNELS_IMG, diff_aug=args.diff_aug).to(device)
     # defining optimizers
     opt_gen = optim.Adam(params=gen.parameters(), lr=cfg.LEARNING_RATE, betas=(0.0, 0.99))
     opt_dis = optim.Adam(params=dis.parameters(), lr=cfg.LEARNING_RATE, betas=(0.0, 0.99))
