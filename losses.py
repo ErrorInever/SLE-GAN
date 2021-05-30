@@ -13,7 +13,7 @@ def reconstruction_loss_mse(x, f):
 
 def hinge_loss(real, fake):
     """
-    the hinge version loss
+    The hinge version loss
     :param real: ``Tensor([1, 5, 5])``
     :param fake: ``Tensor([1, 5, 5])``
     :return: ``float``, loss
