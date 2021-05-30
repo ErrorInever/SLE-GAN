@@ -69,11 +69,8 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
 
             # D LOSS
             divergence = hinge_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
-            # hinge_loss = hinge_adv_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
             i_recon_loss = reconstruction_loss_mse(real_128, decoded_real_img)
             i_part_recon_loss = reconstruction_loss_mse(real_cropped_128, decoded_real_img_part)
-
-            # d_loss = hinge_loss + i_recon_loss + i_part_recon_loss
             d_loss = divergence + i_recon_loss + i_part_recon_loss
 
         opt_dis.zero_grad()
@@ -85,10 +82,10 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
         noise = torch.randn(cur_batch_size, cfg.Z_DIMENSION, 1, 1).to(device)
         # Train generator
         with torch.cuda.amp.autocast():
-            # We maximize E[D(G(z))] or minimize the negative of that
+            # We maximize E[D(G(z))]
             fake = gen(noise)
             fake_logits, _, _ = dis(fake)
-            g_loss = gen_hinge_loss(fake_logits)
+            g_loss = torch.mean(fake_logits)
 
         scaler_gen.scale(g_loss).backward()
         scaler_gen.step(opt_gen)
