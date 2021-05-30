@@ -12,7 +12,7 @@ from models.model import Generator, Discriminator, InceptionV3FID
 from config import cfg
 from utils import set_seed, save_checkpoint, load_checkpoint, get_random_noise, print_epoch_time, get_sample_dataloader
 from data.dataset import ImgFolderDataset, FIDNoiseDataset
-from losses import hinge_adv_loss, reconstruction_loss
+from losses import hinge_adv_loss, reconstruction_loss, reconstruction_loss_mse, hinge_loss, gen_hinge_loss
 from metrics import MetricLogger
 
 
@@ -52,6 +52,7 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
     for batch_idx, real in enumerate(loop):
         cur_batch_size = real.shape[0]
         real = real.to(device)
+        real.requires_grad_()
 
         real_cropped_128 = center_crop(real, size=(128, 128))
         real_128 = resize(real, size=(128, 128))
@@ -64,28 +65,34 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
             # Reconstruction loss: we minimize divergence between [||G(f) - T(x)||]
             # Hinge adversarial loss: -E[min(0, -1 + D(x)] - E[min(0, -1 + D(x_hat)] + reconstruction loss
             real_fake_logits_real_images, decoded_real_img_part, decoded_real_img = dis(real)
-            real_fake_logits_fake_images, _, _ = dis(fake)
+            real_fake_logits_fake_images, _, _ = dis(fake.detach())
 
             # D LOSS
-            hinge_loss = hinge_adv_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
-            i_recon_loss = reconstruction_loss(real_128, decoded_real_img)
-            i_part_recon_loss = reconstruction_loss(real_cropped_128, decoded_real_img_part)
+            divergence = hinge_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
+            # hinge_loss = hinge_adv_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
+            i_recon_loss = reconstruction_loss_mse(real_128, decoded_real_img)
+            i_part_recon_loss = reconstruction_loss_mse(real_cropped_128, decoded_real_img_part)
 
-            d_loss = hinge_loss + i_recon_loss + i_part_recon_loss
+            # d_loss = hinge_loss + i_recon_loss + i_part_recon_loss
+            d_loss = divergence + i_recon_loss + i_part_recon_loss
 
         opt_dis.zero_grad()
         scaler_dis.scale(d_loss).backward()
         scaler_dis.step(opt_dis)
         scaler_dis.update()
 
-        real = real.to(device)
+        opt_gen.zero_grad()
         noise = torch.randn(cur_batch_size, cfg.Z_DIMENSION, 1, 1).to(device)
         # Train generator
         with torch.cuda.amp.autocast():
             # We maximize E[D(G(z))] or minimize the negative of that
-            # TODO: train generator
-            pass
+            fake = gen(noise)
+            fake_logits, _, _ = dis(fake)
+            g_loss = gen_hinge_loss(fake_logits)
 
+        scaler_gen.scale(g_loss).backward()
+        scaler_gen.step(opt_gen)
+        scaler_gen.update()
 
         # Eval and metrics
         if fid_score:
