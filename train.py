@@ -57,17 +57,15 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
         real_cropped_128 = center_crop(real, size=(128, 128))
         real_128 = resize(real, size=(128, 128))
         noise = torch.randn(cur_batch_size, cfg.Z_DIMENSION, 1, 1).to(device)
-        # TODO: differentiable augmentation
+        # TODO: add differentiable augmentation
         # Train discriminator
         with torch.cuda.amp.autocast():
             with torch.no_grad():
                 fake = gen(noise)
-            # Reconstruction loss: we minimize divergence between [||G(f) - T(x)||]
-            # Hinge adversarial loss: -E[min(0, -1 + D(x)] - E[min(0, -1 + D(x_hat)] + reconstruction loss
             real_fake_logits_real_images, decoded_real_img_part, decoded_real_img = dis(real)
             real_fake_logits_fake_images, _, _ = dis(fake.detach())
-
-            # D LOSS
+            # maximize
+            # TODO: try dual contrastive loss instead simple hinge
             divergence = hinge_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
             i_recon_loss = reconstruction_loss_mse(real_128, decoded_real_img)
             i_part_recon_loss = reconstruction_loss_mse(real_cropped_128, decoded_real_img_part)
@@ -122,10 +120,12 @@ def evaluate(gen, fid_model, device):
                                             batch_size=cfg.BATCH_SIZE)
     noise = torch.randn([len(real_dataloader), cfg.Z_DIMENSION, 1, 1])
     fake_images = []
+
+    gen.eval()
     for batch in noise:
         batch = batch.to(device)
         fake_images.append(gen(batch.unsqueeze(0)))
-
+    gen.train()
     noise_dataset = FIDNoiseDataset(fake_images)
     fake_dataloader = DataLoader(noise_dataset, batch_size=cfg.BATCH_SIZE)
 
@@ -136,7 +136,7 @@ def evaluate(gen, fid_model, device):
 
 if __name__ == '__main__':
     set_seed(8989)
-
+    # TODO: save config for resume training
     logger = logging.getLogger('train')
     args = parse_args()
 
@@ -177,7 +177,7 @@ if __name__ == '__main__':
     # defining models
     gen = Generator(img_size=cfg.IMG_SIZE, in_channels=cfg.IN_CHANNELS, img_channels=cfg.CHANNELS_IMG,
                     z_dim=cfg.Z_DIMENSION).to(device)
-    dis = Discriminator(img_size=cfg.IMG_SIZE, img_channels=cfg.CHANNELS_IMG).to(device)
+    dis = Discriminator(img_size=cfg.IMG_SIZE, img_channels=cfg.CHANNELS_IMG, diff_aug=True).to(device)
     # defining optimizers
     opt_gen = optim.Adam(params=gen.parameters(), lr=cfg.LEARNING_RATE, betas=(0.0, 0.99))
     opt_dis = optim.Adam(params=dis.parameters(), lr=cfg.LEARNING_RATE, betas=(0.0, 0.99))
