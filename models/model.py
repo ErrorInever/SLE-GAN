@@ -29,7 +29,7 @@ class InceptionV3FID(nn.Module):
         features = x.data.cpu().numpy()
         # prediction
         x = self.fc(x)
-        #   prob = self.softmax(x)
+        # if need probability: prob = self.softmax(x)
         return features
 
     @staticmethod
@@ -319,6 +319,10 @@ class SimpleDecoder(nn.Module):
                 self.body.append(SimpleDecoderBlock(in_channels, self.out_channels * 2))
 
     def forward(self, x):
+        """
+        :param x: ``Tensor([N, C, H, W])``
+        :return: ``Tensor([N, C, H, W])``
+        """
         for layer in self.body:
             x = layer(x)
         # TODO: add Tanh()?
@@ -381,6 +385,7 @@ class Discriminator(nn.Module):
         """
         :param img_size: ``2^n``, must be the same as output of the generator
         :param img_channels: ``int``, 1 for grayscale, 3 for RGB, 4 for transparent
+        :param diff_aug: ``bool``, applied differentiable augmentation layer
         """
         super().__init__()
         assert img_size in [256, 512, 1024], 'image size must be [256, 512, 1024]'
@@ -396,7 +401,6 @@ class Discriminator(nn.Module):
             self.diff_aug_layer = DiffAugmentLayer(mode=cfg.DIFF_AUG_MODE)
         else:
             self.diff_aug_layer = nn.Identity()
-
         self.initial = InputBlockDiscriminator(img_channels, 16, self.ds_factor)    # output shape ℝ[16,256,256]
         self.down_sample_128 = DownSampleBlock(16, 32)                              # output shape ℝ[32,128,128]
         self.down_sample_64 = DownSampleBlock(32, 64)                               # output shape ℝ[64,64,64]
@@ -417,7 +421,7 @@ class Discriminator(nn.Module):
     def forward(self, x):
         """
         :param x: ``Tensor([N, C, H, W])``
-        :return: ``List([[N,1,5,5], [N,3,128,128], [N,3,128,128])``
+        :return: ``List([[N,1,5,5], [N,3,128,128], [N,3,128,128])``, fixed shapes
         """
         if self.training:
             x = self.diff_aug_layer(x)
