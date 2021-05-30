@@ -12,7 +12,7 @@ from models.model import Generator, Discriminator, InceptionV3FID
 from config import cfg
 from utils import set_seed, save_checkpoint, load_checkpoint, get_random_noise, print_epoch_time, get_sample_dataloader
 from data.dataset import ImgFolderDataset, FIDNoiseDataset
-from losses import hinge_adv_loss, reconstruction_loss, reconstruction_loss_mse, hinge_loss, gen_hinge_loss
+from losses import reconstruction_loss_mse, hinge_loss
 from metrics import MetricLogger
 
 
