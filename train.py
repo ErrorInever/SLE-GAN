@@ -70,7 +70,6 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
             )
             real_fake_logits_fake_images, _, _ = dis(DiffAugment(fake.detach(), policy=cfg.DIFF_AUGMENT_POLICY))
             # maximize divergence between real and fake data
-            # TODO: try dual contrastive loss instead simple hinge
             divergence = dual_contrastive_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
             i_recon_loss = reconstruction_loss_mse(real_128, decoded_real_img)
             i_part_recon_loss = reconstruction_loss_mse(real_cropped_128, decoded_real_img_part)
