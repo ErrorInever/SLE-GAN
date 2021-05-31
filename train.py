@@ -53,8 +53,6 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
     :param fid_model: model for calculate fid score
     :param fid_score: ``bool``, if True - calculate fid score otherwise no
     """
-    policy = 'color,translation,cutout'
-
     loop = tqdm(dataloader, leave=True)
     for batch_idx, real in enumerate(loop):
         cur_batch_size = real.shape[0]
@@ -67,9 +65,10 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
         with torch.cuda.amp.autocast():
             with torch.no_grad():
                 fake = gen(noise)
-            real_fake_logits_real_images, decoded_real_img_part, decoded_real_img = dis(DiffAugment(real, policy=policy)
-                                                                                        )
-            real_fake_logits_fake_images, _, _ = dis(DiffAugment(fake.detach(), policy=policy))
+            real_fake_logits_real_images, decoded_real_img_part, decoded_real_img = dis(
+                DiffAugment(real, policy=cfg.DIFF_AUGMENT_POLICY)
+            )
+            real_fake_logits_fake_images, _, _ = dis(DiffAugment(fake.detach(), policy=cfg.DIFF_AUGMENT_POLICY))
             # maximize divergence between real and fake data
             # TODO: try dual contrastive loss instead simple hinge
             divergence = hinge_loss(real_fake_logits_real_images, real_fake_logits_fake_images)

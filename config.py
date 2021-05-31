@@ -16,6 +16,7 @@ __C.START_EPOCH = 0
 __C.END_EPOCH = 1
 __C.LEARNING_RATE = 1e-3
 __C.BATCH_SIZE = 8
+__C.DIFF_AUGMENT_POLICY = 'color,translation,cutout'
 # SHAPES
 __C.Z_DIMENSION = 256
 __C.CHANNELS_IMG = 3
