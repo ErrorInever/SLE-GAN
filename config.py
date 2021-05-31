@@ -13,14 +13,14 @@ __C.DATASET_NAME = ""
 
 # Global
 __C.START_EPOCH = 0
-__C.END_EPOCH = 1
+__C.END_EPOCH = 100
 __C.LEARNING_RATE = 1e-3
 __C.BATCH_SIZE = 8
 __C.DIFF_AUGMENT_POLICY = 'color'
 # SHAPES
 __C.Z_DIMENSION = 256
 __C.CHANNELS_IMG = 3
-__C.IMG_SIZE = 512         # final image size
+__C.IMG_SIZE = 256         # final image size
 # Models features
 __C.IN_CHANNELS = 512
 # Metrics
