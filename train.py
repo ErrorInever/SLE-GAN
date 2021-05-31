@@ -13,6 +13,7 @@ from config import cfg
 from utils import (set_seed, save_checkpoint, load_checkpoint, get_random_noise, print_epoch_time,
                    get_sample_dataloader, init_weights)
 from data.dataset import ImgFolderDataset, FIDNoiseDataset
+from data.diff_aug import DiffAugment
 from losses import reconstruction_loss_mse, hinge_loss
 from metrics import MetricLogger
 
@@ -64,8 +65,10 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
         with torch.cuda.amp.autocast():
             with torch.no_grad():
                 fake = gen(noise)
-            real_fake_logits_real_images, decoded_real_img_part, decoded_real_img = dis(real)
-            real_fake_logits_fake_images, _, _ = dis(fake.detach())
+            real_fake_logits_real_images, decoded_real_img_part, decoded_real_img = dis(
+                DiffAugment(real, policy=cfg.DIFF_AUGMENT_POLICY)
+            )
+            real_fake_logits_fake_images, _, _ = dis(DiffAugment(fake.detach(), policy=cfg.DIFF_AUGMENT_POLICY))
             # maximize divergence between real and fake data
             # TODO: try dual contrastive loss instead simple hinge
             divergence = hinge_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
@@ -84,7 +87,7 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
         with torch.cuda.amp.autocast():
             # maximize E[D(G(z))], also we can minimize the negative of that
             fake = gen(noise)
-            fake_logits, _, _ = dis(fake)
+            fake_logits, _, _ = dis(DiffAugment(fake, policy=cfg.DIFF_AUGMENT_POLICY))
             g_loss = torch.mean(fake_logits)
 
         scaler_gen.scale(g_loss).backward()
@@ -181,7 +184,7 @@ if __name__ == '__main__':
     # defining models
     gen = Generator(img_size=cfg.IMG_SIZE, in_channels=cfg.IN_CHANNELS, img_channels=cfg.CHANNELS_IMG,
                     z_dim=cfg.Z_DIMENSION).to(device)
-    dis = Discriminator(img_size=cfg.IMG_SIZE, img_channels=cfg.CHANNELS_IMG, diff_aug=args.diff_aug).to(device)
+    dis = Discriminator(img_size=cfg.IMG_SIZE, img_channels=cfg.CHANNELS_IMG).to(device)
     # defining optimizers
     opt_gen = optim.Adam(params=gen.parameters(), lr=cfg.LEARNING_RATE, betas=(0.0, 0.99))
     opt_dis = optim.Adam(params=dis.parameters(), lr=cfg.LEARNING_RATE, betas=(0.0, 0.99))
