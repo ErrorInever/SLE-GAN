@@ -8,7 +8,7 @@ cfg = __C
 
 # NAMES
 __C.PROJECT_NAME = "SLE-GC-GAN"
-__C.PROJECT_VERSION_NAME = "SLE-GAN"
+__C.PROJECT_VERSION_NAME = "SLE-GAN-ms-512"
 __C.DATASET_NAME = ""
 
 # Global
@@ -16,11 +16,11 @@ __C.START_EPOCH = 0
 __C.END_EPOCH = 1
 __C.LEARNING_RATE = 1e-3
 __C.BATCH_SIZE = 8
-__C.DIFF_AUGMENT_POLICY = 'color,translation,cutout'
+__C.DIFF_AUGMENT_POLICY = 'color'
 # SHAPES
 __C.Z_DIMENSION = 256
 __C.CHANNELS_IMG = 3
-__C.IMG_SIZE = 1024         # final image size
+__C.IMG_SIZE = 512         # final image size
 # Models features
 __C.IN_CHANNELS = 512
 # Metrics
