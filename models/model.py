@@ -113,8 +113,10 @@ class DiffAugmentLayer(nn.Module):
             )
         elif mode == 'weak':
             self.initial = nn.Sequential(
+                K.ColorJitter(0.1, 0.1, 0.1, 0.1, p=0.5),
                 K.RandomAffine(degrees=0, translate=(1 / 8, 1 / 8), p=0.5),
-                K.RandomErasing((0.0, 0.5), p=0.6),
+                K.RandomErasing((0.0, 0.5), p=0.5),
+                K.RandomPerspective(0.5, p=0.5),
             )
 
     @torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)   # TODO: need another solution with 16FP
