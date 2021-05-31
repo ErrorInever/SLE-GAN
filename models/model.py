@@ -105,7 +105,7 @@ class DiffAugmentLayer(nn.Module):
             self.initial = nn.Sequential(
                 K.ColorJitter(0.1, 0.1, 0.1, 0.1, p=0.8),
                 K.RandomSharpness(0.5, p=0.5),
-                K.RandomAffine((-15., 20.), p=0.8),
+                K.RandomAffine(degrees=0, translate=(1 / 8, 1 / 8), p=0.5),
                 K.RandomErasing((0.0, 0.5), p=0.6),
                 K.RandomHorizontalFlip(p=0.5),
                 K.RandomPerspective(0.5, p=0.5),
@@ -117,6 +117,7 @@ class DiffAugmentLayer(nn.Module):
                 K.RandomErasing((0.0, 0.5), p=0.6),
             )
 
+    @torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)   # TODO: need another solution with 16FP
     def forward(self, x):
         """
         :param x: ``Tensor([N, C, H, W])``
