@@ -198,7 +198,6 @@ if __name__ == '__main__':
         init_weights(gen)
         init_weights(dis)
 
-
     gen.train()
     dis.train()
 
