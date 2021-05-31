@@ -10,7 +10,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from models.model import Generator, Discriminator, InceptionV3FID
 from config import cfg
-from utils import set_seed, save_checkpoint, load_checkpoint, get_random_noise, print_epoch_time, get_sample_dataloader
+from utils import (set_seed, save_checkpoint, load_checkpoint, get_random_noise, print_epoch_time,
+                   get_sample_dataloader, init_weights)
 from data.dataset import ImgFolderDataset, FIDNoiseDataset
 from losses import reconstruction_loss_mse, hinge_loss
 from metrics import MetricLogger
@@ -193,6 +194,10 @@ if __name__ == '__main__':
                                                        dis, opt_dis, scaler_dis, cfg.LEARNING_RATE)
     else:
         fixed_noise = get_random_noise(cfg.FIXED_NOISE_SAMPLES, cfg.Z_DIMENSION, device)
+        logger.info("load weights from normal distribution")
+        init_weights(gen)
+        init_weights(dis)
+
 
     gen.train()
     dis.train()

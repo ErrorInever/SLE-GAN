@@ -3,6 +3,7 @@ import random
 import logging
 import os
 import time
+import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 from config import cfg
@@ -153,3 +154,10 @@ def get_sample_dataloader(dataset, num_samples, batch_size):
     sampler = RandomSampler(sample_ds)
     dataloader = DataLoader(sample_ds, sampler=sampler, batch_size=batch_size)
     return dataloader
+
+
+def init_weights(model):
+    # Initializes weights according to the DCGAN paper
+    for m in model.modules():
+        if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.BatchNorm2d)):
+            nn.init.normal_(m.weight.data, 0.0, 0.02)
