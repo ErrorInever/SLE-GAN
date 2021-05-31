@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import torch.nn as nn
 import kornia.augmentation as K
-from kornia.filters import filter2D
 from tqdm import tqdm
 from scipy.linalg import sqrtm
 from utils import center_crop_img
@@ -126,22 +125,6 @@ class DiffAugmentLayer(nn.Module):
         return self.initial(x)
 
 
-class Blur(nn.Module):
-    """
-    Blur for up sampling
-    Info: https://richzhang.github.io/antialiased-cnns/
-    """
-    def __init__(self):
-        super().__init__()
-        kernel = torch.Tensor([1, 2, 1])
-        self.register_buffer('kernel', kernel)
-
-    def forward(self, x):
-        kernel = self.kernel
-        kernel = kernel[None, None, :] * kernel[None, :, None]
-        return filter2D(x, kernel, normalized=True)
-
-
 class SLE(nn.Module):
     """
     Skip-layer excitation: transforms low resolution input and
@@ -181,7 +164,6 @@ class UpSampleBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.up_block = nn.Sequential(
-            Blur(),
             nn.Upsample(scale_factor=2.0, mode='nearest'),
             nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(out_channels),
@@ -351,7 +333,6 @@ class InputPartBlock(nn.Module):
     def __init__(self, in_features, out_features):
         super().__init__()
         self.initial = nn.Sequential(
-            Blur(),
             nn.Conv2d(in_features, out_features, kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.1)
         )
