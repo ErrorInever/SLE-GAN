@@ -28,7 +28,6 @@ class MetricLogger:
         wandb.init(id=wandb_id, project='SLE-GC-GAN', name=project_version_name, resume=True)
         wandb.config.update({
             'img_size': cfg.IMG_SIZE,
-            'generator_type': cfg.GEN_TYPE,
             'learning_rate': cfg.LEARNING_RATE,
             'z_dimension': cfg.Z_DIMENSION,
             'model_depth': cfg.IN_CHANNELS,
