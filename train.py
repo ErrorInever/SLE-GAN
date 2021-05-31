@@ -94,6 +94,7 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
             if epoch % cfg.FID_FREQ == 0:
                 # TODO: test fid on GPU
                 fid = evaluate(gen, fid_model, device)
+                gen.train()
                 metric_logger.log_fid(fid)
         if batch_idx % cfg.LOG_FREQ == 0:
             metric_logger.log(g_loss, d_loss, divergence, i_recon_loss, i_part_recon_loss)
@@ -108,24 +109,26 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
         )
 
 
+@torch.no_grad()
 def evaluate(gen, fid_model, device):
     """
     Fid evaluate
     :param gen: Generator
     :param fid_model: Inception_v3 model
+    :param device: torch device
     :return: ``float``, fid score
     """
+    gen.eval()
     real_dataset = ImgFolderDataset(cfg.DATASET_PATH, fid=True)
     real_dataloader = get_sample_dataloader(real_dataset, num_samples=cfg.FID_NUM_SAMPLES,
                                             batch_size=cfg.BATCH_SIZE)
     noise = torch.randn([len(real_dataloader), cfg.Z_DIMENSION, 1, 1])
     fake_images = []
 
-    gen.eval()
     for batch in noise:
         batch = batch.to(device)
         fake_images.append(gen(batch.unsqueeze(0)))
-    gen.train()
+
     noise_dataset = FIDNoiseDataset(fake_images)
     fake_dataloader = DataLoader(noise_dataset, batch_size=cfg.BATCH_SIZE)
 
