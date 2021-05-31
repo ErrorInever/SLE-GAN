@@ -1,12 +1,10 @@
 import torch
 import numpy as np
 import torch.nn as nn
-import kornia.augmentation as K
 from tqdm import tqdm
 from scipy.linalg import sqrtm
 from utils import center_crop_img
 from torchvision.models.inception import inception_v3
-from config import cfg
 
 
 class InceptionV3FID(nn.Module):
@@ -91,40 +89,6 @@ class InceptionV3FID(nn.Module):
         fid = self._calculate_fid(real_mu, real_sigma, fake_mu, fake_sigma)
 
         return fid
-
-
-class DiffAugmentLayer(nn.Module):
-    """Layer of differentiable augmentation"""
-    def __init__(self, mode='strong'):
-        """
-        :param mode: ``str``, 'weak' or 'strong', default = 'strong'
-        """
-        assert mode in ['strong', 'weak'], 'invalid module name'
-        super().__init__()
-        if mode == 'strong':
-            self.initial = nn.Sequential(
-                K.ColorJitter(0.1, 0.1, 0.1, 0.1, p=0.8),
-                K.RandomSharpness(0.5, p=0.5),
-                K.RandomAffine(degrees=0, translate=(1 / 8, 1 / 8), p=0.5),
-                K.RandomErasing((0.0, 0.5), p=0.6),
-                K.RandomHorizontalFlip(p=0.5),
-                K.RandomPerspective(0.5, p=0.5),
-                K.RandomRotation(degrees=45.0, p=0.3)
-            )
-        elif mode == 'weak':
-            self.initial = nn.Sequential(
-                K.RandomAffine(degrees=0, translate=(1 / 8, 1 / 8), p=0.5),
-                K.RandomErasing((0.0, 0.5), p=0.5),
-                K.RandomSharpness(0.5, p=0.5),
-            )
-
-    @torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)   # TODO: need another solution with 16FP
-    def forward(self, x):
-        """
-        :param x: ``Tensor([N, C, H, W])``
-        :return: ``Tensor([N, C, H, W])``
-        """
-        return self.initial(x)
 
 
 class SLE(nn.Module):
@@ -381,7 +345,7 @@ class InputBlockDiscriminator(nn.Module):
 
 class Discriminator(nn.Module):
     """Discriminator"""
-    def __init__(self, img_size, img_channels=3, diff_aug=False):
+    def __init__(self, img_size, img_channels=3):
         """
         :param img_size: ``2^n``, must be the same as output of the generator
         :param img_channels: ``int``, 1 for grayscale, 3 for RGB, 4 for transparent
@@ -392,15 +356,10 @@ class Discriminator(nn.Module):
 
         self.img_size = img_size
         self.img_channels = img_channels
-        self.diff_aug = diff_aug
 
         self.factor_down_sample = {"256": 0, "512": 1, "1024": 2}
         self.ds_factor = self.factor_down_sample[str(img_size)]
 
-        if self.diff_aug:
-            self.diff_aug_layer = DiffAugmentLayer(mode=cfg.DIFF_AUG_MODE)
-        else:
-            self.diff_aug_layer = nn.Identity()
         self.initial = InputBlockDiscriminator(img_channels, 16, self.ds_factor)    # output shape ℝ[16,256,256]
         self.down_sample_128 = DownSampleBlock(16, 32)                              # output shape ℝ[32,128,128]
         self.down_sample_64 = DownSampleBlock(32, 64)                               # output shape ℝ[64,64,64]
@@ -423,8 +382,6 @@ class Discriminator(nn.Module):
         :param x: ``Tensor([N, C, H, W])``
         :return: ``List([[N,1,5,5], [N,3,128,128], [N,3,128,128])``, fixed shapes
         """
-        if self.training:
-            x = self.diff_aug_layer(x)
         x = self.initial(x)                                 # output shape ℝ[N, 16, 256, 256]
         x = self.down_sample_128(x)                         # output shape ℝ[N, 32, 128, 128]
         x = self.down_sample_64(x)                          # output shape ℝ[N, 64, 64, 64]

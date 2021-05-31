@@ -14,7 +14,6 @@ __C.DATASET_NAME = ""
 # Global
 __C.START_EPOCH = 0
 __C.END_EPOCH = 1
-__C.DIFF_AUG_MODE = 'weak'
 __C.LEARNING_RATE = 1e-3
 __C.BATCH_SIZE = 8
 # SHAPES

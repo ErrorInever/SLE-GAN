@@ -181,7 +181,7 @@ if __name__ == '__main__':
     # defining models
     gen = Generator(img_size=cfg.IMG_SIZE, in_channels=cfg.IN_CHANNELS, img_channels=cfg.CHANNELS_IMG,
                     z_dim=cfg.Z_DIMENSION).to(device)
-    dis = Discriminator(img_size=cfg.IMG_SIZE, img_channels=cfg.CHANNELS_IMG, diff_aug=args.diff_aug).to(device)
+    dis = Discriminator(img_size=cfg.IMG_SIZE, img_channels=cfg.CHANNELS_IMG).to(device)
     # defining optimizers
     opt_gen = optim.Adam(params=gen.parameters(), lr=cfg.LEARNING_RATE, betas=(0.0, 0.99))
     opt_dis = optim.Adam(params=dis.parameters(), lr=cfg.LEARNING_RATE, betas=(0.0, 0.99))
