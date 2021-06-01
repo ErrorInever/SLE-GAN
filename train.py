@@ -66,8 +66,7 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
             with torch.no_grad():
                 fake = gen(noise)
             real_fake_logits_real_images, decoded_real_img_part, decoded_real_img = dis(
-                DiffAugment(real, policy=cfg.DIFF_AUGMENT_POLICY)
-            )
+                DiffAugment(real, policy=cfg.DIFF_AUGMENT_POLICY))
             real_fake_logits_fake_images, _, _ = dis(DiffAugment(fake.detach(), policy=cfg.DIFF_AUGMENT_POLICY))
             # maximize divergence between real and fake data
             divergence = hinge_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
