@@ -8,7 +8,7 @@ cfg = __C
 
 # NAMES
 __C.PROJECT_NAME = "SLE-GC-GAN"
-__C.PROJECT_VERSION_NAME = "SLE-GAN-ms-512"
+__C.PROJECT_VERSION_NAME = "SLE-GAN-Master-256"
 __C.DATASET_NAME = ""
 
 # Global
@@ -33,8 +33,8 @@ __C.SAVE_EPOCH_FREQ = 1
 # Display results
 __C.NUM_SAMPLES_IMAGES = 16
 __C.FIXED_NOISE_SAMPLES = 16
-__C.LOG_FREQ = 100
-__C.LOG_IMAGE_FREQ = 100
+__C.LOG_FREQ = 50
+__C.LOG_IMAGE_FREQ = 50
 # FID
 __C.FID_NUM_SAMPLES = 256   # number of images for fid dataset
 __C.FID_FREQ = 100
