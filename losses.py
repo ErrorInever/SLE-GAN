@@ -22,13 +22,15 @@ def hinge_loss(real, fake):
     return (F.relu(1 + real) + F.relu(1 - fake)).mean()
 
 
-def hinge_adv_loss(real_fake_logits_real, real_fake_logits_fake):
+def hinge_adv_loss(real_fake_logits_real, real_fake_logits_fake, device):
     """
     the hinge version of the adversarial loss
     :param real_fake_logits_real: ``Tensor([1, 5, 5])``
     :param real_fake_logits_fake: ``Tensor([1, 5, 5])``
+    :param device: torch device
     :return: ``float``, discriminator loss
     """
-    real_loss = -1 * torch.mean(torch.minimum(torch.Tensor([0.0]), -1 + real_fake_logits_real))
-    fake_loss = -1 * torch.mean(torch.minimum(torch.Tensor([0.0]), -1 - real_fake_logits_fake))
+    threshold = torch.Tensor([0.0]).to(device)
+    real_loss = -1 * torch.mean(torch.minimum(threshold, -1 + real_fake_logits_real))
+    fake_loss = -1 * torch.mean(torch.minimum(threshold, -1 - real_fake_logits_fake))
     return real_loss + fake_loss
