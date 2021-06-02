@@ -144,6 +144,27 @@ class UpSampleBlock(nn.Module):
         return self.up_block(x)
 
 
+class GlobalContext(nn.Module):
+    def __init__(self, chan_in, chan_out):
+        super().__init__()
+        self.to_k = nn.Conv2d(chan_in, 1, 1)
+        chan_intermediate = max(3, chan_out // 2)
+
+        self.net = nn.Sequential(
+            nn.Conv2d(chan_in, chan_intermediate, 1),
+            nn.LeakyReLU(0.1),
+            nn.Conv2d(chan_intermediate, chan_out, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        context = self.to_k(x)
+        context = context.flatten(2).softmax(dim=-1)
+        out = torch.einsum('b i n, b c n -> b c i', context, x.flatten(2))
+        out = out.unsqueeze(-1)
+        return self.net(out)
+
+
 class Generator(nn.Module):
     """Generator"""
     def __init__(self, img_size, in_channels=512, img_channels=3, z_dim=256):
@@ -170,22 +191,19 @@ class Generator(nn.Module):
         # input shape [256x4x4]
         self.up_sample_8 = UpSampleBlock(256, 1024)         # output shape ℝ[512x8x8]
         self.up_sample_16 = UpSampleBlock(512, 1024)        # output shape ℝ[512x16x16]
+        self.gl_16_128 = GlobalContext(512, 64)
         self.up_sample_32 = UpSampleBlock(512, 512)         # output shape ℝ[256x32x32]
+        self.gl_32_256 = GlobalContext(256, 32)
         self.up_sample_64 = UpSampleBlock(256, 256)         # output shape ℝ[128x64x64]
+        self.gl_64_512 = GlobalContext(128, 3)
         self.up_sample_128 = UpSampleBlock(128, 128)        # output shape ℝ[64x128x128]
-
+        self.gl_128_1024 = GlobalContext(64, 3)
         if img_size >= 256:
             self.up_sample_256 = UpSampleBlock(64, 64)      # output shape ℝ[32x256x256]
         if img_size >= 512:
             self.up_sample_512 = UpSampleBlock(32, 6)       # output shape ℝ[3x512x512]
         if img_size == 1024:
             self.up_sample_1024 = UpSampleBlock(3, 6)       # output shape ℝ[3x1024x1024]
-
-        # SLE blocks
-        self.sle_8_to_128 = SLE(512, 64)
-        self.sle_16_to_256 = SLE(512, 32)
-        if img_size >= 512:
-            self.sle_32_to_512 = SLE(256, 3)
 
         # Out
         self.output = nn.Sequential(
@@ -200,24 +218,21 @@ class Generator(nn.Module):
         """
         # input shape ℝ[N, z_dim, 1, 1] e.g. ℝ[1, 256, 1, 1]
         x = self.initial(x)
-        x_8 = self.up_sample_8(x)
-        x_16 = self.up_sample_16(x_8)
-        x_32 = self.up_sample_32(x_16)
-        x_64 = self.up_sample_64(x_32)
-        x_128 = self.up_sample_128(x_64)
-        sle_x_128 = self.sle_8_to_128(x_8, x_128)
-        x_256 = self.up_sample_256(sle_x_128)
-        x = self.sle_16_to_256(x_16, x_256)
-
+        x = self.up_sample_8(x)
+        x = self.up_sample_16(x)
+        x_16 = self.gl_16_128(x)
+        x = self.up_sample_32(x_16)
+        x_32 = self.gl_32_256(x)
+        x = self.up_sample_64(x_32)
+        x_64 = self.gl_64_512(x)
+        x = self.up_sample_128(x_64) + x_16
+        x_128 = self.gl_128_1024(x)
+        x = self.up_sample_256(x_128) + x_32
         if self.img_size >= 512:
-            x_512 = self.up_sample_512(x)
-            x = self.sle_32_to_512(x_32, x_512)
-
+            x = self.up_sample_512(x) + x_64
             if self.img_size == 1024:
-                x = self.up_sample_1024(x)
-
+                x = self.up_sample_1024(x) + x_128
         x = self.output(x)
-
         return x
 
 
