@@ -11,7 +11,7 @@ from tqdm import tqdm
 from models.model import Generator, Discriminator, InceptionV3FID
 from config import cfg
 from utils import (set_seed, save_checkpoint, load_checkpoint, get_random_noise, print_epoch_time,
-                   get_sample_dataloader, init_weights)
+                   get_sample_dataloader, init_weights, gradient_penalty)
 from data.dataset import ImgFolderDataset, FIDNoiseDataset
 from data.diff_aug import DiffAugment
 from losses import reconstruction_loss_mse, hinge_loss
@@ -26,6 +26,7 @@ def parse_args():
     parser.add_argument('--device', dest='device', help='Use device: gpu, tpu. Default use gpu if available',
                         default='gpu', type=str)
     parser.add_argument('--diff_aug', dest='diff_aug', help='Use differentiable augmentation', action='store_true')
+    parser.add_argument('--wgp', dest='wgp', help='Use wasserstein distance with gradient penalty', action='store_true')
     parser.add_argument('--fid', dest='fid', help='Display fid score', action='store_true')
     parser.add_argument('--wandb_id', dest='wandb_id', help='Wand metric id for resume', default=None, type=str)
     parser.add_argument('--wandb_key', dest='wandb_key', help='Use this option if you run it from kaggle, '
@@ -107,6 +108,74 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
 
         loop.set_postfix(
             d_loss=d_loss.item(),
+            g_loss=g_loss.item()
+        )
+
+
+@print_epoch_time
+def train_one_epoch_with_gp(gen, opt_gen, crt, opt_crt, dataloader, metric_logger, device, fixed_noise,
+                            epoch, fid_model, fid_score):
+    """
+    Train one epoch with wasserstein distance with gradient penalty
+    :param gen: ``Instance of models.model.Generator``, generator model
+    :param opt_gen: ``Instance of torch.optim``, optimizer for generator
+    :param crt: ``Instance of models.model.Discriminator``, discriminator model
+    :param opt_dis: ``Instance of torch.optim``, optimizer for discriminator
+    :param dataloader: ``Instance of torch.utils.data.DataLoader``, train dataloader
+    :param metric_logger: ``Instance of metrics.MetricLogger``, logger
+    :param device: ``Instance of torch.device``, cuda device
+    :param fixed_noise: ``Tensor([N, 1, Z, 1, 1])``, fixed noise for display result
+    :param epoch: ``int``, current epoch
+    :param fid_model: model for calculate fid score
+    :param fid_score: ``bool``, if True - calculate fid score otherwise no
+    """
+    loop = tqdm(dataloader, leave=True)
+    for batch_idx, real in enumerate(loop):
+        cur_batch_size = real.shape[0]
+        real = real.to(device)
+        real.requires_grad_()
+        real_cropped_128 = center_crop(real, size=(128, 128))
+        real_128 = resize(real, size=(128, 128))
+        # Train critic
+        for _ in range(cfg.CRITIC_ITERATIONS):
+            noise = torch.randn(cur_batch_size, cfg.Z_DIMENSION, 1, 1).to(device)
+            fake = gen(noise)
+            real_fake_logits_real_images, decoded_real_img_part, decoded_real_img = crt(
+                DiffAugment(real, policy=cfg.DIFF_AUGMENT_POLICY))
+            real_fake_logits_fake_images, _, _ = crt(DiffAugment(fake, policy=cfg.DIFF_AUGMENT_POLICY))
+
+            divergence = hinge_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
+            i_recon_loss = reconstruction_loss_mse(real_128, decoded_real_img)
+            i_part_recon_loss = reconstruction_loss_mse(real_cropped_128, decoded_real_img_part)
+            gp = gradient_penalty(crt, real, fake, device)
+            crt_loss = (divergence + i_recon_loss + i_part_recon_loss) + cfg.LAMBDA_GP * gp
+            crt.zero_grad()
+            crt_loss.backward(retain_graph=True)
+            opt_crt.step()
+
+        # Train generator
+        fake_logits, _, _ = crt(fake)
+        g_loss = torch.mean(fake_logits)
+        gen.zero_grad()
+        g_loss.backward()
+        opt_gen.step()
+
+        # Eval and metrics
+        if fid_score:
+            if epoch % cfg.FID_FREQ == 0:
+                # TODO: test fid on GPU
+                fid = evaluate(gen, fid_model, device)
+                gen.train()
+                metric_logger.log_fid(fid)
+        if batch_idx % cfg.LOG_FREQ == 0:
+            metric_logger.log(g_loss, crt_loss, divergence, i_recon_loss, i_part_recon_loss)
+        if batch_idx % cfg.LOG_IMAGE_FREQ == 0:
+            with torch.no_grad():
+                fixed_fakes = gen(fixed_noise)
+                metric_logger.log_image(fixed_fakes, cfg.NUM_SAMPLES_IMAGES, epoch, batch_idx, normalize=True)
+
+        loop.set_postfix(
+            d_loss=crt_loss.item(),
             g_loss=g_loss.item()
         )
 
@@ -205,8 +274,12 @@ if __name__ == '__main__':
     metric_logger = MetricLogger(cfg.PROJECT_VERSION_NAME)
 
     for epoch in range(cfg.START_EPOCH, cfg.END_EPOCH):
-        train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataloader, metric_logger, device,
-                        fixed_noise, epoch, fid_model, fid_score=args.fid)
+        if args.wgp:
+            train_one_epoch_with_gp(gen, opt_gen, dis, opt_dis, dataloader, metric_logger, device, fixed_noise,
+                                    epoch, fid_model, fid_score=args.fid)
+        else:
+            train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataloader, metric_logger, device,
+                            fixed_noise, epoch, fid_model, fid_score=args.fid)
         if cfg.SAVE:
             if epoch % cfg.SAVE_EPOCH_FREQ == 0:
                 save_checkpoint(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, fixed_noise, epoch)

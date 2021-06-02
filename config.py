@@ -17,6 +17,9 @@ __C.END_EPOCH = 100
 __C.LEARNING_RATE = 1e-3
 __C.BATCH_SIZE = 8
 __C.DIFF_AUGMENT_POLICY = 'color'
+# Wasserstein distance with gradient penalty
+__C.CRITIC_ITERATIONS = 5
+__C.LAMBDA_GP = 10
 # SHAPES
 __C.Z_DIMENSION = 256
 __C.CHANNELS_IMG = 3
@@ -33,8 +36,8 @@ __C.SAVE_EPOCH_FREQ = 1
 # Display results
 __C.NUM_SAMPLES_IMAGES = 16
 __C.FIXED_NOISE_SAMPLES = 16
-__C.LOG_FREQ = 50
-__C.LOG_IMAGE_FREQ = 50
+__C.LOG_FREQ = 10
+__C.LOG_IMAGE_FREQ = 10
 # FID
 __C.FID_NUM_SAMPLES = 256   # number of images for fid dataset
 __C.FID_FREQ = 100
