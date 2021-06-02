@@ -17,6 +17,9 @@ __C.END_EPOCH = 100
 __C.LEARNING_RATE = 1e-3
 __C.BATCH_SIZE = 8
 __C.DIFF_AUGMENT_POLICY = 'color'
+# Wasserstein distance with gradient penalty
+__C.CRITIC_ITERATIONS = 5
+__C.LAMBDA_GP = 10
 # SHAPES
 __C.Z_DIMENSION = 256
 __C.CHANNELS_IMG = 3
