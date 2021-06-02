@@ -144,7 +144,7 @@ def train_one_epoch_with_gp(gen, opt_gen, crt, opt_crt, dataloader, metric_logge
                 DiffAugment(real, policy=cfg.DIFF_AUGMENT_POLICY))
             real_fake_logits_fake_images, _, _ = crt(DiffAugment(fake, policy=cfg.DIFF_AUGMENT_POLICY))
 
-            divergence = hinge_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
+            divergence = hinge_adv_loss(real_fake_logits_real_images, real_fake_logits_fake_images, device)
             i_recon_loss = reconstruction_loss_mse(real_128, decoded_real_img)
             i_part_recon_loss = reconstruction_loss_mse(real_cropped_128, decoded_real_img_part)
             gp = gradient_penalty(crt, real, fake, device)
@@ -155,7 +155,7 @@ def train_one_epoch_with_gp(gen, opt_gen, crt, opt_crt, dataloader, metric_logge
 
         # Train generator
         fake_logits, _, _ = crt(fake)
-        g_loss = torch.mean(fake_logits)
+        g_loss = -torch.mean(fake_logits)
         gen.zero_grad()
         g_loss.backward()
         opt_gen.step()
