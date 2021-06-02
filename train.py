@@ -14,7 +14,7 @@ from utils import (set_seed, save_checkpoint, load_checkpoint, get_random_noise,
                    get_sample_dataloader, init_weights, gradient_penalty)
 from data.dataset import ImgFolderDataset, FIDNoiseDataset
 from data.diff_aug import DiffAugment
-from losses import reconstruction_loss_mse, hinge_loss
+from losses import reconstruction_loss_mse, hinge_adv_loss
 from metrics import MetricLogger
 
 
@@ -70,7 +70,7 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
                 DiffAugment(real, policy=cfg.DIFF_AUGMENT_POLICY))
             real_fake_logits_fake_images, _, _ = dis(DiffAugment(fake.detach(), policy=cfg.DIFF_AUGMENT_POLICY))
             # maximize divergence between real and fake data
-            divergence = hinge_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
+            divergence = hinge_adv_loss(real_fake_logits_real_images, real_fake_logits_fake_images, device)
             i_recon_loss = reconstruction_loss_mse(real_128, decoded_real_img)
             i_part_recon_loss = reconstruction_loss_mse(real_cropped_128, decoded_real_img_part)
             d_loss = divergence + i_recon_loss + i_part_recon_loss
@@ -87,7 +87,7 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
             # maximize E[D(G(z))], also we can minimize the negative of that
             fake = gen(noise)
             fake_logits, _, _ = dis(DiffAugment(fake, policy=cfg.DIFF_AUGMENT_POLICY))
-            g_loss = torch.mean(fake_logits)
+            g_loss = -torch.mean(fake_logits)
 
         scaler_gen.scale(g_loss).backward()
         scaler_gen.step(opt_gen)
@@ -144,7 +144,7 @@ def train_one_epoch_with_gp(gen, opt_gen, crt, opt_crt, dataloader, metric_logge
                 DiffAugment(real, policy=cfg.DIFF_AUGMENT_POLICY))
             real_fake_logits_fake_images, _, _ = crt(DiffAugment(fake, policy=cfg.DIFF_AUGMENT_POLICY))
 
-            divergence = hinge_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
+            divergence = hinge_adv_loss(real_fake_logits_real_images, real_fake_logits_fake_images, device)
             i_recon_loss = reconstruction_loss_mse(real_128, decoded_real_img)
             i_part_recon_loss = reconstruction_loss_mse(real_cropped_128, decoded_real_img_part)
             gp = gradient_penalty(crt, real, fake, device)
@@ -155,7 +155,7 @@ def train_one_epoch_with_gp(gen, opt_gen, crt, opt_crt, dataloader, metric_logge
 
         # Train generator
         fake_logits, _, _ = crt(fake)
-        g_loss = torch.mean(fake_logits)
+        g_loss = -torch.mean(fake_logits)
         gen.zero_grad()
         g_loss.backward()
         opt_gen.step()
