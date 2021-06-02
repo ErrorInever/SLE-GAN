@@ -154,7 +154,7 @@ def train_one_epoch_with_gp(gen, opt_gen, crt, opt_crt, dataloader, metric_logge
             opt_crt.step()
 
         # Train generator
-        fake_logits = crt(fake)
+        fake_logits, _, _ = crt(fake)
         g_loss = torch.mean(fake_logits)
         gen.zero_grad()
         g_loss.backward()
