@@ -209,7 +209,7 @@ def evaluate(gen, fid_model, device):
 
 
 if __name__ == '__main__':
-    set_seed(8989)
+    set_seed(7889)
 
     logger = logging.getLogger('train')
     args = parse_args()
