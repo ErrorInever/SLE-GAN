@@ -221,13 +221,13 @@ class Generator(nn.Module):
         x = self.up_sample_8(x)
         x = self.up_sample_16(x)
         x_16 = self.gl_16_128(x)
-        x = self.up_sample_32(x_16)
+        x = self.up_sample_32(x)
         x_32 = self.gl_32_256(x)
-        x = self.up_sample_64(x_32)
+        x = self.up_sample_64(x)
         x_64 = self.gl_64_512(x)
-        x = self.up_sample_128(x_64) + x_16
+        x = self.up_sample_128(x) + x_16
         x_128 = self.gl_128_1024(x)
-        x = self.up_sample_256(x_128) + x_32
+        x = self.up_sample_256(x) + x_32
         if self.img_size >= 512:
             x = self.up_sample_512(x) + x_64
             if self.img_size == 1024:
