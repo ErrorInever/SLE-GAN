@@ -14,7 +14,7 @@ from utils import (set_seed, save_checkpoint, load_checkpoint, get_random_noise,
                    get_sample_dataloader, init_weights, gradient_penalty)
 from data.dataset import ImgFolderDataset, FIDNoiseDataset
 from data.diff_aug import DiffAugment
-from losses import reconstruction_loss_mse, hinge_loss
+from losses import reconstruction_loss_mse, hinge_loss, hinge_adv_loss
 from metrics import MetricLogger
 
 
@@ -70,7 +70,7 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
                 DiffAugment(real, policy=cfg.DIFF_AUGMENT_POLICY))
             real_fake_logits_fake_images, _, _ = dis(DiffAugment(fake.detach(), policy=cfg.DIFF_AUGMENT_POLICY))
             # maximize divergence between real and fake data
-            divergence = hinge_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
+            divergence = hinge_adv_loss(real_fake_logits_real_images, real_fake_logits_fake_images)
             i_recon_loss = reconstruction_loss_mse(real_128, decoded_real_img)
             i_part_recon_loss = reconstruction_loss_mse(real_cropped_128, decoded_real_img_part)
             d_loss = divergence + i_recon_loss + i_part_recon_loss
