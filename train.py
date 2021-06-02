@@ -14,7 +14,7 @@ from utils import (set_seed, save_checkpoint, load_checkpoint, get_random_noise,
                    get_sample_dataloader, init_weights, gradient_penalty)
 from data.dataset import ImgFolderDataset, FIDNoiseDataset
 from data.diff_aug import DiffAugment
-from losses import reconstruction_loss_mse, hinge_loss, hinge_adv_loss
+from losses import reconstruction_loss_mse, hinge_adv_loss
 from metrics import MetricLogger
 
 
