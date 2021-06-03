@@ -87,7 +87,8 @@ def train_one_epoch(gen, opt_gen, scaler_gen, dis, opt_dis, scaler_dis, dataload
             # maximize E[D(G(z))], also we can minimize the negative of that
             fake = gen(noise)
             fake_logits, _, _ = dis(DiffAugment(fake, policy=cfg.DIFF_AUGMENT_POLICY))
-            g_loss = -torch.mean(fake_logits)
+            real_logits, _, _ = dis(DiffAugment(real, policy=cfg.DIFF_AUGMENT_POLICY))
+            g_loss = dual_contrastive_loss(fake_logits, real_logits, device)
 
         scaler_gen.scale(g_loss).backward()
         scaler_gen.step(opt_gen)
