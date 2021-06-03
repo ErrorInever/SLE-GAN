@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 from tqdm import tqdm
 from scipy.linalg import sqrtm
 from utils import center_crop_img
@@ -305,7 +306,7 @@ class SimpleDecoder(nn.Module):
         """
         for layer in self.body:
             x = layer(x)
-        # TODO: add Tanh()?
+        x = F.tanh(x)
         return x
 
 
