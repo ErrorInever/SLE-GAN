@@ -264,9 +264,9 @@ if __name__ == '__main__':
                                                        dis, opt_dis, scaler_dis, cfg.LEARNING_RATE)
     else:
         fixed_noise = get_random_noise(cfg.FIXED_NOISE_SAMPLES, cfg.Z_DIMENSION, device)
-        logger.info("load weights from normal distribution")
-        init_weights(gen)
-        init_weights(dis)
+        # logger.info("load weights from normal distribution")
+        # init_weights(gen)
+        # init_weights(dis)
 
     gen.train()
     dis.train()
