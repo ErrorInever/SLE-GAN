@@ -15,7 +15,7 @@ __C.DATASET_NAME = ""
 __C.START_EPOCH = 0
 __C.END_EPOCH = 100
 __C.LEARNING_RATE = 1e-3
-__C.BATCH_SIZE = 8
+__C.BATCH_SIZE = 10
 __C.DIFF_AUGMENT_POLICY = 'color'
 # Wasserstein distance with gradient penalty
 __C.CRITIC_ITERATIONS = 5
